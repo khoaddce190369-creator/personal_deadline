@@ -1,15 +1,57 @@
 let currentStatus = 'active';
+let myChatId = localStorage.getItem('chatId');
+
+// Kiểm tra login khi mở trang
+if (myChatId) {
+  document.getElementById('login-container').style.display = 'none';
+  document.getElementById('app-container').style.display = 'block';
+  loadDeadlines();
+}
+
+async function login() {
+  const chatId = document.getElementById('chat-id-input').value;
+  const pin = document.getElementById('pin-input').value;
+  const errorEl = document.getElementById('login-error');
+  
+  if (!chatId || !pin) return;
+
+  const res = await fetch('/api/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chatId, pin })
+  });
+  
+  const data = await res.json();
+  if (data.success) {
+    localStorage.setItem('chatId', chatId);
+    myChatId = chatId;
+    errorEl.style.display = 'none';
+    
+    document.getElementById('login-container').style.display = 'none';
+    document.getElementById('app-container').style.display = 'block';
+    loadDeadlines();
+  } else {
+    errorEl.style.display = 'block';
+  }
+}
+
+function logout() {
+  localStorage.removeItem('chatId');
+  myChatId = null;
+  document.getElementById('login-container').style.display = 'block';
+  document.getElementById('app-container').style.display = 'none';
+  document.getElementById('chat-id-input').value = '';
+  document.getElementById('pin-input').value = '';
+}
 
 async function loadDeadlines(status = currentStatus) {
+  if (!myChatId) return;
   currentStatus = status;
   
-  // Cập nhật tab UI
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.classList.remove('active');
-  });
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
   document.querySelectorAll('.tab-btn')[status === 'active' ? 0 : 1].classList.add('active');
 
-  const res = await fetch(`/api/deadlines?status=${status}`);
+  const res = await fetch(`/api/deadlines?status=${status}&chatId=${myChatId}`);
   const data = await res.json();
 
   const listEl = document.getElementById('deadline-list');
@@ -49,7 +91,7 @@ async function markDone(id) {
   await fetch(`/api/deadlines/${id}/status`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: 'completed' })
+    body: JSON.stringify({ status: 'completed', chatId: myChatId })
   });
   loadDeadlines();
 }
@@ -58,17 +100,14 @@ async function markActive(id) {
   await fetch(`/api/deadlines/${id}/status`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: 'active' })
+    body: JSON.stringify({ status: 'active', chatId: myChatId })
   });
   loadDeadlines();
 }
 
 async function deleteItem(id) {
   if (confirm('Bạn có chắc muốn xóa deadline này?')) {
-    await fetch(`/api/deadlines/${id}`, { method: 'DELETE' });
+    await fetch(`/api/deadlines/${id}?chatId=${myChatId}`, { method: 'DELETE' });
     loadDeadlines();
   }
 }
-
-// Khởi tạo
-loadDeadlines('active');

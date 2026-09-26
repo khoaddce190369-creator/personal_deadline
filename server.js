@@ -12,27 +12,36 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Internal Cron: Tự động check deadline mỗi 60 giây (chuẩn xác từng phút)
-setInterval(async () => {
+// Đăng nhập Web bằng chat_id và web_pin
+app.post('/api/login', async (req, res) => {
   try {
-    await reminderService.checkReminders();
+    const { chatId, pin } = req.body;
+    const result = await db.execute({
+      sql: `SELECT * FROM allowed_users WHERE chat_id = ? AND web_pin = ?`,
+      args: [chatId, pin]
+    });
+    
+    if (result.rows.length > 0) {
+      res.json({ success: true });
+    } else {
+      res.status(401).json({ success: false, message: 'Sai ID hoặc PIN' });
+    }
   } catch (err) {
-    console.error('Lỗi khi chạy internal cron:', err);
+    res.status(500).json({ error: err.message });
   }
-}, 60000); // 60000ms = 1 phút
-
-// Keep-alive endpoint: cron-job.org sẽ gọi vào đây mỗi 10-14 phút để chống ngủ
-app.get('/api/ping', (req, res) => {
-  res.json({ status: 'awake', time: Date.now(), message: 'Server is kept alive' });
 });
 
-// API lấy danh sách deadline
+// Lấy danh sách deadline của riêng người dùng
 app.get('/api/deadlines', async (req, res) => {
   try {
     const status = req.query.status || 'active';
+    const chatId = req.query.chatId;
+    
+    if (!chatId) return res.status(401).json({ error: 'Missing chatId' });
+
     const result = await db.execute({
-      sql: `SELECT * FROM deadlines WHERE status = ? ORDER BY deadline_time ASC`,
-      args: [status]
+      sql: `SELECT * FROM deadlines WHERE status = ? AND chat_id = ? ORDER BY deadline_time ASC`,
+      args: [status, chatId]
     });
     res.json(result.rows);
   } catch (err) {
@@ -40,14 +49,14 @@ app.get('/api/deadlines', async (req, res) => {
   }
 });
 
-// API đổi trạng thái
+// Đổi trạng thái deadline
 app.put('/api/deadlines/:id/status', async (req, res) => {
   try {
     const id = req.params.id;
-    const status = req.body.status;
+    const { status, chatId } = req.body;
     await db.execute({
-      sql: `UPDATE deadlines SET status = ? WHERE id = ?`,
-      args: [status, id]
+      sql: `UPDATE deadlines SET status = ? WHERE id = ? AND chat_id = ?`,
+      args: [status, id, chatId]
     });
     res.json({ success: true });
   } catch (err) {
@@ -55,18 +64,33 @@ app.put('/api/deadlines/:id/status', async (req, res) => {
   }
 });
 
-// API xóa deadline
+// Xóa deadline
 app.delete('/api/deadlines/:id', async (req, res) => {
   try {
     const id = req.params.id;
+    const chatId = req.query.chatId;
     await db.execute({
-      sql: `DELETE FROM deadlines WHERE id = ?`,
-      args: [id]
+      sql: `DELETE FROM deadlines WHERE id = ? AND chat_id = ?`,
+      args: [id, chatId]
     });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Internal Cron
+setInterval(async () => {
+  try {
+    await reminderService.checkReminders();
+  } catch (err) {
+    console.error('Lỗi khi chạy internal cron:', err);
+  }
+}, 60000); 
+
+// Keep-alive endpoint
+app.get('/api/ping', (req, res) => {
+  res.json({ status: 'awake', time: Date.now(), message: 'Server is kept alive' });
 });
 
 app.listen(config.port, () => {

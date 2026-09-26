@@ -1,5 +1,4 @@
 const db = require('../db/database');
-const config = require('../config');
 const { formatTime } = require('../utils/parser');
 const telegramService = require('./telegramService');
 
@@ -7,7 +6,6 @@ async function checkReminders() {
   try {
     const now = Date.now();
     
-    // Lấy các deadline đang active và chưa thông báo hoàn toàn
     const result = await db.execute(`SELECT * FROM deadlines WHERE status = 'active' AND notified = 0`);
     
     for (const row of result.rows) {
@@ -18,13 +16,11 @@ async function checkReminders() {
         await sendReminder(row, isExactTime);
         
         if (!isExactTime) {
-          // Đã nhắc trước xong, cập nhật remind_before về 0 để hệ thống tiếp tục nhắc khi tới đúng giờ
           await db.execute({
             sql: `UPDATE deadlines SET remind_before_minutes = 0 WHERE id = ?`,
             args: [row.id]
           });
         } else {
-          // Đã nhắc đúng giờ xong, đánh dấu hoàn tất chu trình báo
           await db.execute({
             sql: `UPDATE deadlines SET notified = 1 WHERE id = ?`,
             args: [row.id]
@@ -38,8 +34,8 @@ async function checkReminders() {
 }
 
 async function sendReminder(deadline, isExactTime) {
-  const chatId = config.adminChatId;
-  if (!chatId) return console.log('Chưa cấu hình ADMIN_CHAT_ID');
+  const chatId = deadline.chat_id; // Đã đổi: Gửi riêng cho người tạo deadline
+  if (!chatId) return;
 
   const titleText = isExactTime ? `🚨 **ĐẾN HẠN DEADLINE!**` : `⏰ **NHẮC HẸN DEADLINE**`;
   const text = `${titleText}\n\n`

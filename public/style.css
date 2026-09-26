@@ -120,3 +120,35 @@ header p {
   background: var(--danger);
   color: #000;
 }
+
+/* Các trường đăng nhập */
+.login-box {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  max-width: 300px;
+  margin: 0 auto;
+}
+
+.input-field {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 10px;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.btn-main {
+  background: rgba(0, 255, 0, 0.1);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 10px;
+  cursor: pointer;
+  font-family: 'Courier New', Courier, monospace;
+  text-transform: uppercase;
+}
+
+.btn-main:hover {
+  background: rgba(0, 255, 0, 0.3);
+}
+
