@@ -7,15 +7,29 @@ async function checkReminders() {
   try {
     const now = Date.now();
     
-    // Lấy các deadline đang active và chưa thông báo
+    // Lấy các deadline đang active và chưa thông báo hoàn toàn
     const result = await db.execute(`SELECT * FROM deadlines WHERE status = 'active' AND notified = 0`);
     
     for (const row of result.rows) {
       const targetTime = row.deadline_time - (row.remind_before_minutes * 60 * 1000);
       
-      // Nếu đã đến hoặc qua thời điểm cần nhắc (và chưa nhắc)
       if (now >= targetTime) {
-        await sendReminder(row);
+        const isExactTime = row.remind_before_minutes === 0;
+        await sendReminder(row, isExactTime);
+        
+        if (!isExactTime) {
+          // Đã nhắc trước xong, cập nhật remind_before về 0 để hệ thống tiếp tục nhắc khi tới đúng giờ
+          await db.execute({
+            sql: `UPDATE deadlines SET remind_before_minutes = 0 WHERE id = ?`,
+            args: [row.id]
+          });
+        } else {
+          // Đã nhắc đúng giờ xong, đánh dấu hoàn tất chu trình báo
+          await db.execute({
+            sql: `UPDATE deadlines SET notified = 1 WHERE id = ?`,
+            args: [row.id]
+          });
+        }
       }
     }
   } catch (err) {
@@ -23,11 +37,12 @@ async function checkReminders() {
   }
 }
 
-async function sendReminder(deadline) {
+async function sendReminder(deadline, isExactTime) {
   const chatId = config.adminChatId;
   if (!chatId) return console.log('Chưa cấu hình ADMIN_CHAT_ID');
 
-  const text = `⏰ **NHẮC HẸN DEADLINE**\n\n`
+  const titleText = isExactTime ? `🚨 **ĐẾN HẠN DEADLINE!**` : `⏰ **NHẮC HẸN DEADLINE**`;
+  const text = `${titleText}\n\n`
              + `📌 Nội dung: ${deadline.title}\n`
              + `📅 Hạn chót: ${formatTime(deadline.deadline_time)}`;
 
@@ -48,11 +63,6 @@ async function sendReminder(deadline) {
 
   try {
     await telegramService.sendMessage(chatId, text, options);
-    // Đánh dấu là đã nhắc
-    await db.execute({
-      sql: `UPDATE deadlines SET notified = 1 WHERE id = ?`,
-      args: [deadline.id]
-    });
   } catch (err) {
     console.error('Lỗi gửi nhắc nhở:', err);
   }
