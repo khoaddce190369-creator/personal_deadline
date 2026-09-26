@@ -1,0 +1,122 @@
+:root {
+  --bg-color: #050505;
+  --container-bg: #0a0a0a;
+  --card-bg: #111111;
+  --text-main: #00ff00;
+  --text-muted: #007700;
+  --accent: #00ff00;
+  --accent-hover: #33ff33;
+  --danger: #ff3333;
+  --border-color: #004400;
+}
+
+body {
+  margin: 0;
+  font-family: 'Courier New', Courier, monospace;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+}
+
+.container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 30px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 20px;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 24px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+header p {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.tab-btn {
+  flex: 1;
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  padding: 10px;
+  border-radius: 0;
+  cursor: pointer;
+  transition: 0.2s;
+  font-family: 'Courier New', Courier, monospace;
+  text-transform: uppercase;
+}
+
+.tab-btn.active {
+  background-color: rgba(0, 255, 0, 0.1);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.2);
+}
+
+.tab-btn:hover {
+  background-color: rgba(0, 255, 0, 0.05);
+}
+
+.deadline-card {
+  background-color: var(--card-bg);
+  padding: 15px;
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--accent);
+  margin-bottom: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.deadline-info h3 {
+  margin: 0 0 5px 0;
+  font-size: 16px;
+}
+
+.deadline-info p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.actions button {
+  background: none;
+  border: 1px solid;
+  cursor: pointer;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: 'Courier New', Courier, monospace;
+  margin-left: 5px;
+}
+
+.btn-done { 
+  color: var(--accent); 
+  border-color: var(--accent);
+}
+.btn-del { 
+  color: var(--danger); 
+  border-color: var(--danger);
+}
+.btn-done:hover { 
+  background: var(--accent);
+  color: #000;
+}
+.btn-del:hover { 
+  background: var(--danger);
+  color: #000;
+}
