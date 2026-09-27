@@ -55,7 +55,7 @@ async function sendReminder(deadline, reminderType) {
   let titleText = `⏰ **NHẮC HẸN DEADLINE**`;
   if (reminderType === 'exact') titleText = `🚨 **ĐẾN HẠN DEADLINE!**`;
   else if (reminderType === 'overdue') titleText = `💥 **QUÁ HẠN! HÃY HOÀN THÀNH DEADLINE!**`;
-  else if (reminderType === 'alarm') titleText = `[ALARM_TRIGGER] 💀 **DẬY MAU! ĐÃ BỎ QUA 3 LẦN!** 💀`;
+  else if (reminderType === 'alarm') titleText = `[BAOTHUC] 💀 **DẬY MAU! ĐÃ BỎ QUA 3 LẦN!** 💀`;
 
   const text = `${titleText}\n\n`
              + `📌 Nội dung: ${deadline.title}\n`

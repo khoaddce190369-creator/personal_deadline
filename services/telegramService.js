@@ -106,6 +106,7 @@ bot.on('callback_query', async (query) => {
       
       const row = result.rows[0];
       if (row) {
+        const wasAlarming = row.remind_before_minutes <= -6;
         const timeLeftMinutes = Math.floor((row.deadline_time - Date.now()) / 60000);
         const newRemindBefore = timeLeftMinutes - snoozeMinutes;
         
@@ -115,16 +116,32 @@ bot.on('callback_query', async (query) => {
         });
         
         bot.editMessageText(query.message.text + `\n\n🔄 *Đã báo lại sau ${snoozeMinutes} phút*`, { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown' });
+        
+        if (wasAlarming) {
+          bot.sendMessage(chatId, `[TATBAOTHUC] 🛑 Đã tạm tắt còi báo động!`);
+        }
       }
     }
     
     else if (action.startsWith('done_')) {
       const deadlineId = action.split('_')[1];
+      
+      const result = await db.execute({
+        sql: `SELECT remind_before_minutes FROM deadlines WHERE id = ? AND chat_id = ?`,
+        args: [deadlineId, chatId]
+      });
+      const row = result.rows[0];
+      const wasAlarming = row && row.remind_before_minutes <= -6;
+
       await db.execute({
         sql: `UPDATE deadlines SET status = 'completed' WHERE id = ? AND chat_id = ?`,
         args: [deadlineId, chatId]
       });
       bot.editMessageText(query.message.text + `\n\n✅ *Đã hoàn thành!*`, { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown' });
+      
+      if (wasAlarming) {
+        bot.sendMessage(chatId, `[TATBAOTHUC] 🛑 Đã tắt còi báo động!`);
+      }
     }
   } catch (error) {
     console.error('Lỗi khi xử lý callback query:', error);
