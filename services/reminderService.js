@@ -16,19 +16,25 @@ async function checkReminders() {
         
         let reminderType = 'before';
         if (row.remind_before_minutes === 0) reminderType = 'exact';
-        else if (row.remind_before_minutes < 0) reminderType = 'overdue';
+        else if (row.remind_before_minutes < 0) {
+          // -2: Quá hạn lần 1
+          // -4: Quá hạn lần 2
+          // -6 trở đi: Đã bỏ qua 3 lần -> BẬT CHẾ ĐỘ BÁO THỨC ĐỊA NGỤC
+          if (row.remind_before_minutes <= -6) {
+            reminderType = 'alarm';
+          } else {
+            reminderType = 'overdue';
+          }
+        }
 
         await sendReminder(row, reminderType);
         
         if (row.remind_before_minutes > 0) {
-          // Đã nhắc trước xong, chuẩn bị để tới đúng giờ nhắc lại
           await db.execute({
             sql: `UPDATE deadlines SET remind_before_minutes = 0 WHERE id = ?`,
             args: [row.id]
           });
         } else {
-          // Nếu đúng giờ HOẶC đang quá hạn: tiếp tục lùi thời gian nhắc đi 2 phút (thành số âm)
-          // Để 2 phút sau hệ thống lại tự động gọi vào hàm này và spam tiếp
           const nextSpamMinutes = row.remind_before_minutes - 2;
           await db.execute({
             sql: `UPDATE deadlines SET remind_before_minutes = ? WHERE id = ?`,
@@ -49,6 +55,7 @@ async function sendReminder(deadline, reminderType) {
   let titleText = `⏰ **NHẮC HẸN DEADLINE**`;
   if (reminderType === 'exact') titleText = `🚨 **ĐẾN HẠN DEADLINE!**`;
   else if (reminderType === 'overdue') titleText = `💥 **QUÁ HẠN! HÃY HOÀN THÀNH DEADLINE!**`;
+  else if (reminderType === 'alarm') titleText = `[ALARM_TRIGGER] 💀 **DẬY MAU! ĐÃ BỎ QUA 3 LẦN!** 💀`;
 
   const text = `${titleText}\n\n`
              + `📌 Nội dung: ${deadline.title}\n`
