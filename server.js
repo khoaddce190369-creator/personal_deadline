@@ -88,9 +88,9 @@ setInterval(async () => {
   }
 }, 60000); 
 
-// Keep-alive endpoint
-app.get('/api/ping', (req, res) => {
-  res.json({ status: 'awake', time: Date.now(), message: 'Server is kept alive' });
+// Keep-alive endpoint (siêu nhẹ 2 bytes để cron-job không bao giờ bị lỗi payload)
+app.all('/api/ping', (req, res) => {
+  res.status(200).send('OK');
 });
 
 app.listen(config.port, () => {
