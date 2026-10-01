@@ -5,6 +5,149 @@ const timezone = require('dayjs/plugin/timezone');
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
+// Chuyển đổi chuỗi số tiền thông minh (50k, 1.5tr, 2m, 50000, 50.000)
+function parseAmount(amountStr) {
+  if (typeof amountStr === 'number') return Math.abs(amountStr);
+  if (!amountStr) return 0;
+  
+  let str = amountStr.toString().trim().toLowerCase();
+  str = str.replace(/[+-\s₫đvnd]/g, '');
+
+  let multiplier = 1;
+  if (str.endsWith('k')) {
+    multiplier = 1000;
+    str = str.slice(0, -1);
+  } else if (str.endsWith('tr') || str.endsWith('trieu') || str.endsWith('triệu')) {
+    multiplier = 1000000;
+    str = str.replace(/(tr|trieu|triệu)$/, '');
+  } else if (str.endsWith('m')) {
+    multiplier = 1000000;
+    str = str.slice(0, -1);
+  } else if (str.endsWith('b') || str.endsWith('ty') || str.endsWith('tỷ')) {
+    multiplier = 1000000000;
+    str = str.replace(/(b|ty|tỷ)$/, '');
+  }
+
+  // Thay dấu phẩy thập phân nếu có kiểu "1,5tr"
+  if (str.includes(',') && !str.includes('.')) {
+    str = str.replace(',', '.');
+  } else {
+    // Loại bỏ dấu chấm ngăn cách hàng nghìn kiểu "50.000"
+    if ((str.match(/\./g) || []).length > 1 || (str.includes('.') && str.indexOf('.') === str.length - 4)) {
+      str = str.replace(/\./g, '');
+    }
+  }
+
+  const num = parseFloat(str);
+  return isNaN(num) ? 0 : Math.round(num * multiplier);
+}
+
+// Kiểm tra xem 1 chuỗi có phải là số tiền hay không
+function isAmountString(str) {
+  if (!str) return false;
+  const s = str.trim().toLowerCase().replace(/[+-\s₫đvnd]/g, '');
+  // Không chứa dấu gạch chéo thời gian (/)
+  if (str.includes('/')) return false;
+  return /^\d+(\.\d+)?(k|tr|trieu|triệu|m|b|ty|tỷ)?$/i.test(s) || /^\d{1,3}(\.\d{3})+$/.test(s);
+}
+
+/**
+ * Phân tích tin nhắn Quản lý tiền bạc
+ * Cú pháp hỗ trợ các dạng linh hoạt dựa trên cấu trúc cũ (ngăn cách dấu phẩy, thêm trường + hoặc -):
+ * - Dạng 1: `+, Số tiền, Nội dung, [Tên quỹ]` hoặc `-, Số tiền, Nội dung, [Tên quỹ]`
+ *   VD: `-, 45k, Cơm trưa, Ăn uống`
+ * - Dạng 2: `Nội dung, +, Số tiền, [Tên quỹ]` hoặc `Nội dung, -, Số tiền, [Tên quỹ]`
+ *   VD: `Cơm trưa, -, 45k, Ăn uống`
+ * - Dạng 3: `Nội dung, -Số tiền, [Tên quỹ]` hoặc `Nội dung, +Số tiền, [Tên quỹ]`
+ *   VD: `Cơm trưa, -45k, Ăn uống`
+ * - Dạng 4: `-, 45k, Cơm trưa` (Quỹ mặc định là 'Quỹ chung')
+ */
+function parseFinanceMessage(text) {
+  if (!text || typeof text !== 'string') return null;
+
+  const rawParts = text.split(',').map(p => p.trim()).filter(Boolean);
+  if (rawParts.length < 2) {
+    // Trường hợp gõ không dấu phẩy như "+ 50k Cơm trưa" hoặc "- 50k Cơm trưa"
+    const spaceMatch = text.trim().match(/^([+-])\s*(\d+[a-zA-Z\d\.]*)\s*(.*)$/);
+    if (spaceMatch) {
+      const type = spaceMatch[1] === '+' ? 'income' : 'expense';
+      const amount = parseAmount(spaceMatch[2]);
+      const rest = spaceMatch[3].trim();
+      const restParts = rest.split(',').map(p => p.trim()).filter(Boolean);
+      const description = restParts[0] || (type === 'income' ? 'Thu nhập' : 'Chi tiêu');
+      const fundName = restParts[1] || 'Quỹ chung';
+      if (amount > 0) {
+        return { isFinance: true, type, amount, description, fundName };
+      }
+    }
+    return null;
+  }
+
+  let type = null; // 'income' | 'expense'
+  let amount = 0;
+  let remainingParts = [];
+
+  // 1. Kiểm tra xem có phần nào là dấu '+' hoặc '-' riêng biệt không
+  let signIndex = rawParts.findIndex(p => p === '+' || p === '-');
+  if (signIndex !== -1) {
+    type = rawParts[signIndex] === '+' ? 'income' : 'expense';
+    // Loại bỏ phần dấu
+    remainingParts = rawParts.filter((_, idx) => idx !== signIndex);
+  } else {
+    // 2. Kiểm tra xem có phần nào bắt đầu bằng '+' hoặc '-' kết hợp số tiền không (vd: -45k, +5tr)
+    let signedAmountIndex = rawParts.findIndex(p => {
+      const s = p.trim();
+      return (s.startsWith('+') || s.startsWith('-')) && isAmountString(s) && !s.includes('/');
+    });
+
+    if (signedAmountIndex !== -1) {
+      const signedStr = rawParts[signedAmountIndex].trim();
+      type = signedStr.startsWith('+') ? 'income' : 'expense';
+      amount = parseAmount(signedStr);
+      remainingParts = rawParts.filter((_, idx) => idx !== signedAmountIndex);
+    } else {
+      // 3. Kiểm tra trường đầu tiên bắt đầu bằng '+' hoặc '-' (vd: "+ Lương", "- Cơm trưa")
+      const firstPart = rawParts[0];
+      if (firstPart.startsWith('+') || firstPart.startsWith('-')) {
+        type = firstPart.startsWith('+') ? 'income' : 'expense';
+        const cleanedFirst = firstPart.substring(1).trim();
+        remainingParts = [cleanedFirst, ...rawParts.slice(1)].filter(Boolean);
+      }
+    }
+  }
+
+  // Nếu không phát hiện dấu + hay - nào thì không phải tin nhắn tài chính
+  if (!type) {
+    return null;
+  }
+
+  // 4. Nếu chưa trích xuất được số tiền, tìm trong remainingParts
+  if (amount <= 0) {
+    const amtIndex = remainingParts.findIndex(p => isAmountString(p));
+    if (amtIndex !== -1) {
+      amount = parseAmount(remainingParts[amtIndex]);
+      remainingParts = remainingParts.filter((_, idx) => idx !== amtIndex);
+    }
+  }
+
+  if (amount <= 0) {
+    throw new Error('Không tìm thấy số tiền hợp lệ. VD: `-, 45k, Cơm trưa, Ăn uống` hoặc `+, 5tr, Lương, Tiết kiệm`');
+  }
+
+  // 5. Trích xuất Nội dung (description) và Tên quỹ (fundName)
+  const description = remainingParts[0] || (type === 'income' ? 'Thu nhập' : 'Chi tiêu');
+  const fundName = remainingParts[1] || 'Quỹ chung';
+
+  return {
+    isFinance: true,
+    type,
+    amount,
+    description,
+    fundName
+  };
+}
+
+// Phân tích tin nhắn Deadline (giữ nguyên hoạt động cũ)
 function parseMessage(text) {
   const parts = text.split(',').map(p => p.trim());
   if (parts.length < 2) {
@@ -71,7 +214,15 @@ function formatTime(timestamp) {
   return dayjs(timestamp).tz("Asia/Ho_Chi_Minh").format('HH:mm DD/MM/YYYY');
 }
 
+function formatMoney(amount) {
+  const num = Number(amount) || 0;
+  return num.toLocaleString('vi-VN') + ' đ';
+}
+
 module.exports = {
   parseMessage,
-  formatTime
+  parseFinanceMessage,
+  parseAmount,
+  formatTime,
+  formatMoney
 };

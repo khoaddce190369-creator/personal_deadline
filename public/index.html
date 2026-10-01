@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quản lý Deadline</title>
+  <title>Quản lý Deadline & Tiền bạc</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,33 +11,160 @@
   <!-- Màn hình Đăng nhập -->
   <div class="container" id="login-container">
     <header>
-      <h1>ĐĂNG NHẬP</h1>
-      <p>Nhập ID và mã PIN lấy từ Bot Telegram (/web)</p>
+      <h1>HỆ THỐNG TRỢ LÝ</h1>
+      <p>Quản lý Deadline & Tài chính cá nhân</p>
+      <p style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">Nhập ID và mã PIN lấy từ Bot Telegram (/web)</p>
     </header>
     <div class="login-box">
       <input type="text" id="chat-id-input" placeholder="Nhập ID Telegram..." class="input-field">
       <input type="password" id="pin-input" placeholder="Nhập mã PIN..." class="input-field">
-      <button onclick="login()" class="btn-main">Đăng Nhập</button>
+      <button onclick="login()" class="btn-main">ĐĂNG NHẬP</button>
       <p id="login-error" style="color: var(--danger); font-size: 14px; display: none;">Sai thông tin đăng nhập!</p>
     </div>
   </div>
 
-  <!-- Màn hình Quản lý Deadline -->
+  <!-- Màn hình chính sau khi Đăng nhập -->
   <div class="container" id="app-container" style="display: none;">
     <header>
-      <h1>QUẢN LÝ DEADLINE</h1>
-      <p>Hệ thống tự động nhắc hẹn qua Telegram</p>
+      <h1 id="app-header-title">BẢNG ĐIỀU KHIỂN</h1>
+      <p>Đồng bộ 2 chiều với Bot Telegram</p>
       <button onclick="logout()" class="btn-del" style="margin-top: 10px;">Đăng xuất</button>
     </header>
 
-    <div class="tabs">
-      <button class="tab-btn active" onclick="loadDeadlines('active')">ĐANG CHỜ</button>
-      <button class="tab-btn" onclick="loadDeadlines('completed')">ĐÃ XONG</button>
+    <!-- Thanh chuyển đổi tính năng: Deadline vs Quản lý Tiền -->
+    <div class="nav-switch">
+      <button class="nav-btn active" id="nav-deadline-btn" onclick="switchSection('deadline')">⏰ DEADLINE</button>
+      <button class="nav-btn" id="nav-finance-btn" onclick="switchSection('finance')">💰 QUẢN LÝ TIỀN</button>
     </div>
 
-    <div id="deadline-list" class="deadline-list">
-      <!-- Dữ liệu sẽ được load ở đây -->
+    <!-- ================= SECTION 1: DEADLINE ================= -->
+    <div id="section-deadline">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="loadDeadlines('active')">ĐANG CHỜ</button>
+        <button class="tab-btn" onclick="loadDeadlines('completed')">ĐÃ XONG</button>
+      </div>
+
+      <div id="deadline-list" class="deadline-list">
+        <!-- Danh sách Deadline load ở đây -->
+      </div>
     </div>
+
+    <!-- ================= SECTION 2: QUẢN LÝ TIỀN BẠC ================= -->
+    <div id="section-finance" style="display: none;">
+      
+      <!-- 1. Thống kê tổng quan -->
+      <div class="finance-overview-grid">
+        <!-- Tổng tài sản -->
+        <div class="stat-card">
+          <div class="stat-title">💳 TỔNG TIỀN TẤT CẢ QUỸ</div>
+          <div class="stat-value neon" id="total-balance-display">0 đ</div>
+          <div class="stat-sub" id="funds-count-display">0 quỹ đang hoạt động</div>
+        </div>
+
+        <!-- Hạn mức chi tiêu tuần -->
+        <div class="stat-card">
+          <div class="stat-header-row">
+            <div class="stat-title">📅 CHI TIÊU TUẦN (<span id="week-label-display">Hiện tại</span>)</div>
+            <button class="btn-small" onclick="openBudgetModal()">✏️ Đặt hạn mức</button>
+          </div>
+          <div class="budget-stat-row">
+            <div>
+              <span class="budget-label">Hạn mức:</span>
+              <span class="budget-val" id="weekly-budget-display">0 đ</span>
+            </div>
+            <div>
+              <span class="budget-label">Đã chi:</span>
+              <span class="budget-val" id="weekly-spent-display" style="color: var(--danger);">0 đ</span>
+            </div>
+            <div>
+              <span class="budget-label">Còn lại:</span>
+              <span class="budget-val" id="weekly-remaining-display">0 đ</span>
+            </div>
+          </div>
+
+          <!-- Progress Bar Chi Tiêu Tuần -->
+          <div class="progress-bar-container">
+            <div class="progress-bar-fill" id="budget-progress-bar" style="width: 0%;"></div>
+          </div>
+          <div class="progress-info" id="budget-progress-text">Chưa đặt hạn mức tuần</div>
+        </div>
+      </div>
+
+      <!-- 2. Quản lý Quỹ -->
+      <div class="section-box">
+        <div class="section-box-header">
+          <h3>🏦 CÁC QUỸ QUẢN LÝ CHI TRẢ</h3>
+          <button class="btn-small btn-accent" onclick="toggleFundForm()">➕ Tạo Quỹ Mới</button>
+        </div>
+
+        <!-- Form tạo quỹ mới (mặc định ẩn) -->
+        <div id="new-fund-form" class="inline-form" style="display: none;">
+          <input type="text" id="fund-name-input" placeholder="Tên quỹ (VD: Ăn uống, Tiết kiệm...)" class="input-field">
+          <input type="text" id="fund-init-balance-input" placeholder="Số dư ban đầu (VD: 500k hoặc 500000)" class="input-field">
+          <div class="form-btn-group">
+            <button class="btn-main" onclick="handleCreateFund()">Lưu Quỹ</button>
+            <button class="btn-del" onclick="toggleFundForm()">Hủy</button>
+          </div>
+        </div>
+
+        <!-- Danh sách thẻ Quỹ -->
+        <div id="funds-list" class="funds-grid">
+          <!-- Load các quỹ ở đây -->
+        </div>
+      </div>
+
+      <!-- 3. Ghi nhận giao dịch nhanh -->
+      <div class="section-box">
+        <div class="section-box-header">
+          <h3>⚡ GHI NHẬN GIAO DỊCH (THU / CHI)</h3>
+        </div>
+
+        <div class="trans-form">
+          <div class="trans-type-selector">
+            <button type="button" class="type-btn active expense" id="type-expense-btn" onclick="selectTransType('expense')">
+              🔴 Chi tiêu (-)
+            </button>
+            <button type="button" class="type-btn income" id="type-income-btn" onclick="selectTransType('income')">
+              🟢 Thu nhập (+)
+            </button>
+          </div>
+
+          <div class="form-row">
+            <input type="text" id="trans-amount-input" placeholder="Số tiền (VD: 45k hoặc 45000)" class="input-field">
+            <select id="trans-fund-select" class="input-field">
+              <option value="Quỹ chung">Quỹ chung</option>
+            </select>
+          </div>
+
+          <input type="text" id="trans-desc-input" placeholder="Nội dung (VD: Cơm trưa, Xăng xe, Tiền thưởng...)" class="input-field">
+          
+          <button class="btn-main" onclick="handleAddTransaction()" style="width: 100%; margin-top: 5px;">
+            LƯU GIAO DỊCH
+          </button>
+        </div>
+      </div>
+
+      <!-- 4. Lịch sử giao dịch -->
+      <div class="section-box">
+        <div class="section-box-header">
+          <h3>📜 LỊCH SỬ GIAO DỊCH</h3>
+        </div>
+
+        <!-- Bộ lọc lịch sử -->
+        <div class="tabs filter-tabs">
+          <button class="tab-btn active" onclick="loadTransactions('all')">TẤT CẢ</button>
+          <button class="tab-btn" onclick="loadTransactions('expense')">CHI TIÊU (-)</button>
+          <button class="tab-btn" onclick="loadTransactions('income')">THU NHẬP (+)</button>
+          <button class="tab-btn" onclick="loadTransactions('week')">TUẦN NÀY</button>
+        </div>
+
+        <div id="transactions-list" class="transactions-list">
+          <!-- Danh sách giao dịch load ở đây -->
+        </div>
+      </div>
+
+    </div>
+
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.9/dayjs.min.js"></script>

@@ -31,6 +31,47 @@ async function initDb() {
       )
     `);
     
+    // Bảng quản lý các quỹ tài chính (funds)
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS funds (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        balance REAL DEFAULT 0,
+        created_at INTEGER
+      )
+    `);
+    await db.execute(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_funds_chat_name ON funds (chat_id, name)
+    `);
+
+    // Bảng lưu lịch sử giao dịch (thu / chi)
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id TEXT NOT NULL,
+        type TEXT NOT NULL, -- 'income' hoặc 'expense'
+        amount REAL NOT NULL,
+        description TEXT NOT NULL,
+        fund_name TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    `);
+
+    // Bảng cài đặt ngân sách / hạn mức chi tiêu tuần
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS weekly_budgets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id TEXT NOT NULL,
+        week_key TEXT NOT NULL, -- vd: '2026-W40' hoặc 'default'
+        amount REAL NOT NULL,
+        created_at INTEGER
+      )
+    `);
+    await db.execute(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_budgets_chat_week ON weekly_budgets (chat_id, week_key)
+    `);
+    
     // Đảm bảo Admin luôn được phép dùng bot mà không cần mã mời
     if (config.adminChatId) {
       await db.execute({

@@ -39,4 +39,29 @@
 4. Bấm **CREATE**.
 
 Xong! Hệ thống của bạn đã chạy 24/7 hoàn toàn tự động và miễn phí.
-"# personal_deadline" 
+
+---
+
+## 💰 Tính năng mới: Quản lý Tiền bạc & Ngân sách tuần
+
+### 1. Nhập Thu/Chi qua Bot Telegram (Cấu trúc tương tự Deadline, quyết định bằng `+` hoặc `-`):
+- **Chi tiêu (`-`)**:
+  - `-, 45k, Cơm trưa, Ăn uống`
+  - Hoặc: `Cơm trưa, -, 45k, Ăn uống`
+  - Hoặc: `Cơm trưa, -45k, Ăn uống`
+  - *(Nếu không điền tên quỹ, mặc định sẽ vào "Quỹ chung")*
+- **Thu nhập (`+`)**:
+  - `+, 5tr, Lương tháng, Tiết kiệm`
+  - Hoặc: `Thưởng nóng, +500k, Quỹ chung`
+
+### 2. Các lệnh tra cứu nhanh trên Bot Telegram:
+- `/tien` hoặc `/vi`: Xem Tổng tài sản, Chi tiêu tuần này, Số tiền còn lại và Số dư các quỹ.
+- `/setbudget <số tiền>`: Đặt hạn mức chi tiêu cho 1 tuần (VD: `/setbudget 1.5tr` hoặc `/setbudget 1500000`).
+- `/web`: Lấy mã PIN 6 số để đăng nhập vào Web.
+
+### 3. Giao diện Web:
+- Chuyển đổi giữa 2 tab: `⏰ DEADLINE` và `💰 QUẢN LÝ TIỀN`.
+- Xem tổng tiền của tất cả các quỹ, thanh tiến độ hạn mức tuần.
+- Tạo các quỹ riêng với tên tùy chọn (Ăn uống, Sinh hoạt, Tiết kiệm, Học tập...).
+- Ghi nhận giao dịch nhanh và xem lịch sử giao dịch (có thể xóa để hoàn tiền lại vào quỹ).
+

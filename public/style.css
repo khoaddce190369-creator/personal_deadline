@@ -2,12 +2,19 @@
   --bg-color: #050505;
   --container-bg: #0a0a0a;
   --card-bg: #111111;
+  --card-hover: #161616;
   --text-main: #00ff00;
-  --text-muted: #007700;
+  --text-muted: #008800;
   --accent: #00ff00;
   --accent-hover: #33ff33;
   --danger: #ff3333;
+  --warning: #ffcc00;
   --border-color: #004400;
+  --border-focus: #00aa00;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
@@ -15,86 +22,133 @@ body {
   font-family: 'Courier New', Courier, monospace;
   background-color: var(--bg-color);
   color: var(--text-main);
+  line-height: 1.5;
 }
 
 .container {
-  max-width: 600px;
+  max-width: 650px;
   margin: 0 auto;
-  padding: 20px;
+  padding: 20px 15px;
 }
 
 header {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 25px;
   border-bottom: 1px solid var(--border-color);
-  padding-bottom: 20px;
+  padding-bottom: 15px;
 }
 
 header h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
   text-transform: uppercase;
   letter-spacing: 2px;
+  text-shadow: 0 0 8px rgba(0, 255, 0, 0.4);
 }
 
 header p {
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 13px;
+  margin: 5px 0 0 0;
 }
 
-.tabs {
+/* Thanh điều hướng chính (Nav Switcher) */
+.nav-switch {
   display: flex;
   gap: 10px;
   margin-bottom: 20px;
 }
 
+.nav-btn {
+  flex: 1;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  padding: 12px;
+  cursor: pointer;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 14px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.2s ease;
+}
+
+.nav-btn.active {
+  background-color: rgba(0, 255, 0, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 12px rgba(0, 255, 0, 0.3);
+}
+
+.nav-btn:hover:not(.active) {
+  background-color: rgba(0, 255, 0, 0.05);
+  color: #33ff33;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+}
+
 .tab-btn {
   flex: 1;
+  min-width: 80px;
   background-color: var(--bg-color);
   border: 1px solid var(--border-color);
   color: var(--text-muted);
-  padding: 10px;
-  border-radius: 0;
+  padding: 9px;
   cursor: pointer;
   transition: 0.2s;
   font-family: 'Courier New', Courier, monospace;
   text-transform: uppercase;
+  font-size: 12px;
 }
 
 .tab-btn.active {
   background-color: rgba(0, 255, 0, 0.1);
-  border: 1px solid var(--accent);
+  border-color: var(--accent);
   color: var(--accent);
-  box-shadow: 0 0 10px rgba(0, 255, 0, 0.2);
+  box-shadow: 0 0 8px rgba(0, 255, 0, 0.2);
 }
 
 .tab-btn:hover {
   background-color: rgba(0, 255, 0, 0.05);
 }
 
+/* Thẻ Deadline */
 .deadline-card {
   background-color: var(--card-bg);
-  padding: 15px;
+  padding: 14px;
   border: 1px solid var(--border-color);
   border-left: 4px solid var(--accent);
-  margin-bottom: 15px;
+  margin-bottom: 12px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  transition: background 0.2s;
+}
+
+.deadline-card:hover {
+  background-color: var(--card-hover);
 }
 
 .deadline-info h3 {
   margin: 0 0 5px 0;
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .deadline-info p {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
-.actions button {
+/* Buttons */
+.actions button, .btn-small {
   background: none;
   border: 1px solid;
   cursor: pointer;
@@ -102,6 +156,7 @@ header p {
   font-size: 12px;
   font-family: 'Courier New', Courier, monospace;
   margin-left: 5px;
+  transition: all 0.2s;
 }
 
 .btn-done { 
@@ -112,7 +167,15 @@ header p {
   color: var(--danger); 
   border-color: var(--danger);
 }
-.btn-done:hover { 
+.btn-small {
+  color: var(--text-muted);
+  border-color: var(--border-color);
+}
+.btn-accent {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.btn-done:hover, .btn-accent:hover { 
   background: var(--accent);
   color: #000;
 }
@@ -120,13 +183,17 @@ header p {
   background: var(--danger);
   color: #000;
 }
+.btn-small:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
-/* Các trường đăng nhập */
+/* Login box */
 .login-box {
   display: flex;
   flex-direction: column;
   gap: 15px;
-  max-width: 300px;
+  max-width: 320px;
   margin: 0 auto;
 }
 
@@ -136,19 +203,347 @@ header p {
   color: var(--text-main);
   padding: 10px;
   font-family: 'Courier New', Courier, monospace;
+  font-size: 14px;
+  width: 100%;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 8px rgba(0, 255, 0, 0.3);
 }
 
 .btn-main {
   background: rgba(0, 255, 0, 0.1);
   border: 1px solid var(--accent);
   color: var(--accent);
-  padding: 10px;
+  padding: 11px;
   cursor: pointer;
   font-family: 'Courier New', Courier, monospace;
   text-transform: uppercase;
+  font-weight: bold;
+  transition: all 0.2s;
 }
 
 .btn-main:hover {
   background: rgba(0, 255, 0, 0.3);
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.4);
 }
 
+/* ================= FINANCE SECTION STYLES ================= */
+
+.finance-overview-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  padding: 16px;
+  position: relative;
+}
+
+.stat-card:hover {
+  border-color: var(--border-focus);
+}
+
+.stat-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.stat-title {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: bold;
+  margin: 6px 0;
+  letter-spacing: 1px;
+}
+
+.stat-value.neon {
+  color: var(--accent);
+  text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+.stat-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Thống kê ngân sách tuần */
+.budget-stat-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+
+.budget-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: block;
+}
+
+.budget-val {
+  font-size: 15px;
+  font-weight: bold;
+}
+
+/* Thanh Tiến độ ngân sách */
+.progress-bar-container {
+  width: 100%;
+  height: 10px;
+  background-color: #1a1a1a;
+  border: 1px solid var(--border-color);
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background-color: var(--accent);
+  transition: width 0.4s ease, background-color 0.3s;
+  box-shadow: 0 0 8px rgba(0, 255, 0, 0.5);
+}
+
+.progress-bar-fill.warning {
+  background-color: var(--warning);
+  box-shadow: 0 0 8px rgba(255, 204, 0, 0.5);
+}
+
+.progress-bar-fill.danger {
+  background-color: var(--danger);
+  box-shadow: 0 0 8px rgba(255, 51, 51, 0.6);
+}
+
+.progress-info {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 5px;
+  text-align: right;
+}
+
+/* Khối nội dung */
+.section-box {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.section-box-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  border-bottom: 1px dashed var(--border-color);
+  padding-bottom: 8px;
+}
+
+.section-box-header h3 {
+  margin: 0;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Danh sách Quỹ */
+.funds-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.fund-card {
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  padding: 12px;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.fund-card:hover {
+  border-color: var(--accent);
+}
+
+.fund-name {
+  font-size: 13px;
+  font-weight: bold;
+  color: #fff;
+  margin-bottom: 5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.fund-balance {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--accent);
+  margin: 4px 0;
+}
+
+.fund-balance.negative {
+  color: var(--danger);
+}
+
+.btn-fund-del {
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  opacity: 0.6;
+}
+
+.btn-fund-del:hover {
+  opacity: 1;
+}
+
+/* Form tạo quỹ inline */
+.inline-form {
+  background: #0d0d0d;
+  border: 1px dashed var(--border-color);
+  padding: 12px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-btn-group {
+  display: flex;
+  gap: 10px;
+}
+
+.form-btn-group button {
+  flex: 1;
+}
+
+/* Form Ghi nhận giao dịch */
+.trans-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trans-type-selector {
+  display: flex;
+  gap: 10px;
+}
+
+.type-btn {
+  flex: 1;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  padding: 9px;
+  cursor: pointer;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  font-weight: bold;
+  transition: all 0.2s;
+}
+
+.type-btn.expense.active {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: rgba(255, 51, 51, 0.1);
+  box-shadow: 0 0 8px rgba(255, 51, 51, 0.3);
+}
+
+.type-btn.income.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(0, 255, 0, 0.1);
+  box-shadow: 0 0 8px rgba(0, 255, 0, 0.3);
+}
+
+.form-row {
+  display: flex;
+  gap: 10px;
+}
+
+.form-row .input-field {
+  flex: 1;
+}
+
+/* Danh sách Lịch sử Giao dịch */
+.transactions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trans-item {
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.2s;
+}
+
+.trans-item:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.trans-item.expense {
+  border-left: 3px solid var(--danger);
+}
+
+.trans-item.income {
+  border-left: 3px solid var(--accent);
+}
+
+.trans-desc {
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 3px;
+}
+
+.trans-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 10px;
+}
+
+.trans-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.trans-amount {
+  font-size: 15px;
+  font-weight: bold;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.trans-amount.expense {
+  color: var(--danger);
+}
+
+.trans-amount.income {
+  color: var(--accent);
+}
+
+.filter-tabs {
+  margin-bottom: 12px;
+}

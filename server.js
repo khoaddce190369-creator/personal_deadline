@@ -5,6 +5,7 @@ const config = require('./config');
 const db = require('./db/database');
 const reminderService = require('./services/reminderService');
 const telegramService = require('./services/telegramService'); 
+const financeService = require('./services/financeService'); 
 
 const app = express();
 
@@ -73,6 +74,128 @@ app.delete('/api/deadlines/:id', async (req, res) => {
       sql: `DELETE FROM deadlines WHERE id = ? AND chat_id = ?`,
       args: [id, chatId]
     });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// === API QUẢN LÝ TIỀN BẠC (FINANCE) ===
+
+// Lấy tổng quan tài chính (tổng tiền, hạn mức tuần, chi tiêu tuần, danh sách quỹ, giao dịch gần đây)
+app.get('/api/finance/overview', async (req, res) => {
+  try {
+    const chatId = req.query.chatId;
+    if (!chatId) return res.status(401).json({ error: 'Missing chatId' });
+
+    const overview = await financeService.getOverview(chatId);
+    res.json(overview);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Cài đặt hạn mức chi tiêu tuần
+app.post('/api/finance/weekly-budget', async (req, res) => {
+  try {
+    const { chatId, amount } = req.body;
+    if (!chatId) return res.status(401).json({ error: 'Missing chatId' });
+
+    const result = await financeService.setWeeklyBudget(chatId, amount);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Lấy danh sách các quỹ
+app.get('/api/finance/funds', async (req, res) => {
+  try {
+    const chatId = req.query.chatId;
+    if (!chatId) return res.status(401).json({ error: 'Missing chatId' });
+
+    const funds = await financeService.getFunds(chatId);
+    res.json(funds);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Tạo quỹ mới
+app.post('/api/finance/funds', async (req, res) => {
+  try {
+    const { chatId, name, initialBalance } = req.body;
+    if (!chatId) return res.status(401).json({ error: 'Missing chatId' });
+    if (!name) return res.status(400).json({ error: 'Tên quỹ không được để trống' });
+
+    const newFund = await financeService.createFund(chatId, name, initialBalance || 0);
+    res.json({ success: true, fund: newFund });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Xóa quỹ
+app.delete('/api/finance/funds/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const chatId = req.query.chatId;
+    if (!chatId) return res.status(401).json({ error: 'Missing chatId' });
+
+    await financeService.deleteFund(chatId, id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Lấy danh sách giao dịch
+app.get('/api/finance/transactions', async (req, res) => {
+  try {
+    const chatId = req.query.chatId;
+    if (!chatId) return res.status(401).json({ error: 'Missing chatId' });
+
+    const options = {
+      limit: parseInt(req.query.limit) || 50,
+      fund: req.query.fund,
+      type: req.query.type,
+      weekOnly: req.query.weekOnly === 'true'
+    };
+
+    const transactions = await financeService.getTransactions(chatId, options);
+    res.json(transactions);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Thêm giao dịch mới (Thu nhập hoặc Chi tiêu)
+app.post('/api/finance/transactions', async (req, res) => {
+  try {
+    const { chatId, type, amount, description, fundName } = req.body;
+    if (!chatId) return res.status(401).json({ error: 'Missing chatId' });
+
+    const result = await financeService.addTransaction(chatId, {
+      type,
+      amount,
+      description,
+      fundName
+    });
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Xóa giao dịch (hoàn lại số dư quỹ)
+app.delete('/api/finance/transactions/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const chatId = req.query.chatId;
+    if (!chatId) return res.status(401).json({ error: 'Missing chatId' });
+
+    await financeService.deleteTransaction(chatId, id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
