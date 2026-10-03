@@ -149,6 +149,20 @@ app.delete('/api/finance/funds/:id', async (req, res) => {
   }
 });
 
+// Chỉnh sửa số dư quỹ qua Web
+app.put('/api/finance/funds/:id/balance', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { chatId, balance } = req.body;
+    if (!chatId) return res.status(401).json({ error: 'Missing chatId' });
+
+    const result = await financeService.updateFundBalance(chatId, id, balance);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Lấy danh sách giao dịch
 app.get('/api/finance/transactions', async (req, res) => {
   try {

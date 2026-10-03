@@ -42,6 +42,15 @@ function parseAmount(amountStr) {
   return isNaN(num) ? 0 : Math.round(num * multiplier);
 }
 
+// Chuyển đổi số tiền có hỗ trợ dấu âm (dùng khi chỉnh sửa số dư quỹ, VD: -700k hoặc 500k)
+function parseSignedAmount(amountStr) {
+  if (typeof amountStr === 'number') return amountStr;
+  if (!amountStr) return 0;
+  const isNegative = amountStr.toString().trim().startsWith('-');
+  const absVal = parseAmount(amountStr);
+  return isNegative ? -absVal : absVal;
+}
+
 // Kiểm tra xem 1 chuỗi có phải là số tiền hay không
 function isAmountString(str) {
   if (!str) return false;
@@ -50,7 +59,7 @@ function isAmountString(str) {
   return /^\d+(\.\d+)?(k|tr|trieu|triệu|m|b|ty|tỷ)?$/i.test(s) || /^\d{1,3}(\.\d{3})+$/.test(s);
 }
 
-// Chuẩn hóa và nhận diện 3 tag chính: Tiêu dùng, Tiết kiệm, Phát sinh
+// Chuẩn hóa và nhận diện các tag chính: Tiêu dùng, Tiết kiệm, Phát sinh, Trả nợ
 function normalizeTag(str) {
   if (!str) return null;
   const clean = str.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // bỏ dấu tiếng Việt để so sánh
@@ -63,6 +72,9 @@ function normalizeTag(str) {
   }
   if (clean === 'phat sinh' || clean === 'ps' || clean === 'phat' || clean === 'extra') {
     return 'Phát sinh';
+  }
+  if (clean === 'tra no' || clean === 'trano' || clean === 'no' || clean === 'debt' || clean === 'tra') {
+    return 'Trả nợ';
   }
   return null;
 }
@@ -99,14 +111,14 @@ function parseDateTime(timeStr) {
 }
 
 /**
- * Phân tích tin nhắn Quản lý tiền bạc theo đúng yêu cầu:
- * Cú pháp: +/-số tiền, tag, nội dung(có hay không cũng được), thời gian(tương tự deadline)
+ * Phân tích tin nhắn Quản lý tiền bạc:
+ * Cú pháp: +/-số tiền, tag, nội dung(tùy chọn), thời gian(tùy chọn)
  * Quy tắc:
- * 1. Chỉ có đúng 3 quỹ: "Tiêu dùng", "Tiết kiệm", "Phát sinh".
- * 2. Khi không nhập tag nào trong 3 tag:
+ * 1. Các quỹ: "Tiêu dùng", "Tiết kiệm", "Phát sinh", "Trả nợ".
+ * 2. Khi không nhập tag nào trong các tag:
  *    - Nếu là '+' -> tự động cộng vào quỹ Tiết kiệm
  *    - Nếu là '-' -> tự động trừ vào quỹ Tiêu dùng
- * 3. Nội dung và Thời gian là tùy chọn (nếu không nhập thời gian thì lấy thời điểm hiện tại).
+ * 3. Nội dung và Thời gian là tùy chọn.
  */
 function parseFinanceMessage(text) {
   if (!text || typeof text !== 'string') return null;
@@ -119,20 +131,17 @@ function parseFinanceMessage(text) {
   let remainingParts = [];
 
   // 1. Kiểm tra phần đầu tiên hoặc bất kỳ phần nào có dấu +/- kèm số tiền
-  // Dạng 1: Part 0 là "-50k" hoặc "+100k" hoặc "+ 500k"
   const firstMatch = rawParts[0].match(/^([+-])\s*(\d+[a-zA-Z\d\.]*)$/);
   if (firstMatch) {
     type = firstMatch[1] === '+' ? 'income' : 'expense';
     amount = parseAmount(firstMatch[2]);
     remainingParts = rawParts.slice(1);
   } 
-  // Dạng 2: Part 0 là riêng dấu "+" hoặc "-", Part 1 là số tiền "50k" (VD: `-, 50k, tiêu dùng`)
   else if ((rawParts[0] === '+' || rawParts[0] === '-') && rawParts[1] && isAmountString(rawParts[1])) {
     type = rawParts[0] === '+' ? 'income' : 'expense';
     amount = parseAmount(rawParts[1]);
     remainingParts = rawParts.slice(2);
   }
-  // Dạng 3: Tìm trong các parts nếu có part nào bắt đầu bằng + hoặc - kết hợp số
   else {
     const signedIndex = rawParts.findIndex(p => {
       const s = p.trim();
@@ -158,7 +167,7 @@ function parseFinanceMessage(text) {
   let descParts = [];
 
   for (const part of remainingParts) {
-    // Ktra có phải là 1 trong 3 Tag không
+    // Ktra có phải là 1 trong các Tag không
     const tag = normalizeTag(part);
     if (tag && !matchedFund) {
       matchedFund = tag;
@@ -177,7 +186,7 @@ function parseFinanceMessage(text) {
   }
 
   // 3. Quy tắc mặc định quỹ khi không có tag:
-  // "khi tôi nhập mà không có tên tag nào trong 3 tag thì nếu là + thì sẽ cộng tiền vào tiết kiệm, nếu là - thì sẽ - vào quỹ tiêu dùng"
+  // Nếu không nhập tag: '+' vào Tiết kiệm, '-' vào Tiêu dùng
   let fundName = matchedFund;
   if (!fundName) {
     fundName = (type === 'income') ? 'Tiết kiệm' : 'Tiêu dùng';
@@ -272,13 +281,15 @@ function formatTime(timestamp) {
 
 function formatMoney(amount) {
   const num = Number(amount) || 0;
-  return num.toLocaleString('vi-VN') + ' đ';
+  const sign = num < 0 ? '-' : '';
+  return sign + Math.abs(num).toLocaleString('vi-VN') + ' đ';
 }
 
 module.exports = {
   parseMessage,
   parseFinanceMessage,
   parseAmount,
+  parseSignedAmount,
   parseDateTime,
   normalizeTag,
   formatTime,

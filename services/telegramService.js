@@ -64,12 +64,13 @@ bot.on('message', async (msg) => {
       return bot.sendMessage(
         chatId,
         `📖 **BẢNG HƯỚNG DẪN GIAO TIẾP VỚI BOT**\n\n` +
-        `💰 **1. QUẢN LÝ TÀI CHÍNH (3 QUỸ CỐ ĐỊNH)**\n` +
+        `💰 **1. QUẢN LÝ TÀI CHÍNH (4 QUỸ)**\n` +
         `• **Cú pháp:** \`+/-số tiền, tag, nội dung, thời gian\`\n` +
-        `• **3 Quỹ chuẩn:**\n` +
-        `  - 🛒 *Tiêu dùng*: 500k/tuần (dư cuối tuần tự chuyển sang Tiết kiệm)\n` +
-        `  - ⚡ *Phát sinh*: 100k/tuần (gym, nợ... dư cuối tuần tự sang Tiết kiệm)\n` +
-        `  - 🐷 *Tiết kiệm*: Tích lũy liên tục (nhận tiền nạp & tiền dư 2 quỹ)\n` +
+        `• **4 Quỹ gồm:**\n` +
+        `  - *Tiêu dùng*: 500k/tuần (dư cuối tuần tự sang Tiết kiệm)\n` +
+        `  - *Phát sinh*: 100k/tuần (gym, nợ... dư cuối tuần tự sang Tiết kiệm)\n` +
+        `  - *Trả nợ*: Mỗi tháng là -700k (-700.000 đ)\n` +
+        `  - *Tiết kiệm*: Tích lũy liên tục (nhận tiền nạp & tiền dư các quỹ)\n` +
         `• **Quy tắc khi không ghi tag:**\n` +
         `  - Dấu **\`-\`** ➔ Tự động trừ vào **Quỹ Tiêu dùng**\n` +
         `  - Dấu **\`+\`** ➔ Tự động cộng vào **Quỹ Tiết kiệm**\n` +
@@ -77,6 +78,7 @@ bot.on('message', async (msg) => {
         `  - \`-50k, tiêu dùng, ăn trưa, 12/00\`\n` +
         `  - \`-45k, cơm trưa\` *(tự trừ Tiêu dùng)*\n` +
         `  - \`-30k, phát sinh, gửi xe\`\n` +
+        `  - \`+200k, trả nợ, trả góp đợt 1\` *(giảm nợ)*\n` +
         `  - \`+100k, tiết kiệm, tiền mừng\`\n` +
         `  - \`+200k, làm thêm\` *(tự cộng Tiết kiệm)*\n` +
         `  - \`-25k\` hoặc \`+500k\` *(nhập siêu nhanh)*\n\n` +
@@ -104,7 +106,7 @@ bot.on('message', async (msg) => {
     ) {
       const overview = await financeService.getOverview(chatId);
       let reply = `💰 **TÌNH HÌNH TÀI CHÍNH HIỆN TẠI**\n\n`;
-      reply += `💳 **Tổng tài sản (3 quỹ):** \`${formatMoney(overview.totalBalance)}\`\n\n`;
+      reply += `💳 **Tổng tài sản (4 quỹ):** \`${formatMoney(overview.totalBalance)}\`\n\n`;
 
       reply += `📊 **Tiến độ tuần (${overview.weekInfo.label}):**\n`;
       reply += `• Hạn mức cấp tuần: \`${formatMoney(overview.weeklyBudget)}\` (500k + 100k)\n`;
@@ -116,10 +118,11 @@ bot.on('message', async (msg) => {
       }
       reply += `*(Hết tuần, toàn bộ số dư còn lại sẽ tự động cộng dồn sang Quỹ Tiết kiệm)*\n\n`;
 
-      reply += `🏦 **Chi tiết 3 Quỹ:**\n`;
-      reply += `🛒 **Tiêu dùng:** \`${formatMoney(overview.spendingBalance)}\` / 500,000 đ\n`;
-      reply += `⚡ **Phát sinh:** \`${formatMoney(overview.extraBalance)}\` / 100,000 đ\n`;
-      reply += `🐷 **Tiết kiệm:** \`${formatMoney(overview.savingsBalance)}\` (Tích lũy)\n\n`;
+      reply += `🏦 **Chi tiết 4 Quỹ:**\n`;
+      reply += `• **Tiêu dùng:** \`${formatMoney(overview.spendingBalance)}\` / 500,000 đ\n`;
+      reply += `• **Phát sinh:** \`${formatMoney(overview.extraBalance)}\` / 100,000 đ\n`;
+      reply += `• **Trả nợ:** \`${formatMoney(overview.debtBalance)}\` / -700,000 đ/tháng\n`;
+      reply += `• **Tiết kiệm:** \`${formatMoney(overview.savingsBalance)}\` (Tích lũy)\n\n`;
 
       reply += `💡 Gõ \`-50k, ăn trưa\` để chi tiêu hoặc \`+100k\` để thêm tiết kiệm.\n`;
       reply += `💡 Nhắn \`?\` để mở lại bảng hướng dẫn.`;

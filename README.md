@@ -42,12 +42,13 @@ Xong! Hệ thống của bạn đã chạy 24/7 hoàn toàn tự động và mi�
 
 ---
 
-## 💰 Quản lý Tài chính Cá nhân (Hệ thống 3 Quỹ & Tự động kết chuyển tuần)
+## Quản lý Tài chính Cá nhân (Hệ thống 4 Quỹ & Tự động kết chuyển chu kỳ)
 
-### 1. Quy tắc 3 Quỹ:
+### 1. Quy tắc 4 Quỹ:
 1. **Quỹ Tiêu dùng** (Tag `tiêu dùng`): Cấp **500.000 đ / tuần**. Hết tuần tự động reset lại 500k, tiền còn dư tuần đó được tự động cộng dồn vào **Quỹ Tiết kiệm**.
-2. **Quỹ Phát sinh** (Tag `phát sinh`): Cấp **100.000 đ / tuần** (dành cho gym, trả nợ, việc đột xuất...). Hết tuần tự động reset lại 100k, tiền còn dư tự động chuyển vào **Quỹ Tiết kiệm**.
-3. **Quỹ Tiết kiệm** (Tag `tiết kiệm`): Tích lũy liên tục (nhận tiền nạp trực tiếp & tiền dư từ 2 quỹ mỗi cuối tuần).
+2. **Quỹ Phát sinh** (Tag `phát sinh`): Cấp **100.000 đ / tuần** (dành cho gym, việc đột xuất...). Hết tuần tự động reset lại 100k, tiền còn dư tự động chuyển vào **Quỹ Tiết kiệm**.
+3. **Quỹ Trả nợ** (Tag `trả nợ` / `tra no` / `no`): Mỗi tháng định mức ban đầu là **-700.000 đ / tháng**. Hết tháng reset về -700k. Có thể trả nợ bằng tin nhắn `+số tiền, trả nợ`.
+4. **Quỹ Tiết kiệm** (Tag `tiết kiệm`): Tích lũy liên tục (nhận tiền nạp trực tiếp & tiền dư từ các quỹ tuần cũ).
 
 ---
 
@@ -62,6 +63,7 @@ Xong! Hệ thống của bạn đã chạy 24/7 hoàn toàn tự động và mi�
 - Chi tiêu dùng: `-50k, tiêu dùng, ăn trưa, 12/00`
 - Chi tiêu tắt không cần tag (tự vào Tiêu dùng): `-45k, cơm trưa`
 - Chi phát sinh: `-30k, phát sinh, gửi xe`
+- Trả bớt nợ: `+200k, trả nợ, trả nợ bạn`
 - Thu nhập / Tiết kiệm: `+100k, tiết kiệm, tiền mừng`
 - Thu nhập tắt không cần tag (tự vào Tiết kiệm): `+500k, làm thêm, 15/30/02/10`
 - Nhập siêu nhanh chỉ có tiền: `-25k` hoặc `+200k`
@@ -70,15 +72,15 @@ Xong! Hệ thống của bạn đã chạy 24/7 hoàn toàn tự động và mi�
 
 ### 3. Các lệnh tra cứu nhanh trên Bot Telegram:
 - `?`: Xem bảng hướng dẫn đầy đủ về cú pháp giao tiếp với bot.
-- `/finance` (hoặc `/tien`, `/vi`): Xem tình hình tài chính hiện tại, số dư 3 quỹ & tiến độ tuần.
+- `/finance` (hoặc `/tien`, `/vi`): Xem tình hình tài chính hiện tại, số dư 4 quỹ & tiến độ chu kỳ.
 - `/web`: Lấy mã PIN 6 số để đăng nhập vào Web Dashboard.
 - `/start` hoặc `/help`: Khởi động và xem thông tin giới thiệu.
 
 ---
 
 ### 4. Giao diện Web:
-- Chuyển đổi giữa 2 tab: `⏰ DEADLINE` và `💰 TÀI CHÍNH 3 QUỸ`.
-- Xem tổng tiền của 3 quỹ, thanh tiến độ chi tiêu tuần (hạn mức 600k = 500k Tiêu dùng + 100k Phát sinh).
-- Hiển thị trực quan trạng thái 3 quỹ và ghi chép nhanh giao dịch.
-- Lịch sử giao dịch & vết tự động kết chuyển số dư tuần cũ sang Tiết kiệm.
+- Chuyển đổi giữa 2 tab: `DEADLINE` và `TÀI CHÍNH 4 QUỸ`.
+- **Chỉnh sửa số dư:** Cho phép bấm nút `[Sửa số dư]` ở bất kỳ quỹ nào để cập nhật số dư mong muốn trực tiếp (nhập dạng `500k`, `-700k`, `1000000`, v.v.).
+- Hiển thị trực quan 4 quỹ dạng chữ phẳng (không emoji/icon), hạn mức tuần và tháng.
+- Lịch sử giao dịch & vết tự động kết chuyển số dư.
 
