@@ -54,11 +54,14 @@
       
       <!-- 1. Thống kê tổng quan -->
       <div class="finance-overview-grid">
-        <!-- Tổng tài sản -->
+        <!-- Tổng số tiền -->
         <div class="stat-card">
-          <div class="stat-title">TỔNG TÀI SẢN</div>
+          <div class="stat-header-row">
+            <div class="stat-title">TỔNG SỐ TIỀN</div>
+            <button class="btn-small" onclick="handleEditTotalBalance()">Sửa tổng tiền</button>
+          </div>
           <div class="stat-value neon" id="total-balance-display">0 đ</div>
-          <div class="stat-sub">Tiêu dùng + Phát sinh + Trả nợ + Tiết kiệm</div>
+          <div class="stat-sub">Biến động theo mọi thu / chi & quỹ (khi quỹ nợ tăng thì tổng tiền giảm)</div>
         </div>
 
         <!-- Hạn mức chi tiêu tuần -->

@@ -288,6 +288,30 @@ async function handleEditFundBalance(fundId, fundName, currentBalance) {
   }
 }
 
+// Chỉnh sửa tổng số tiền trực tiếp qua Web
+async function handleEditTotalBalance() {
+  const currentTotalText = document.getElementById('total-balance-display').textContent.trim();
+  const input = prompt(`Nhập tổng số tiền mới của bạn:\n(Hiện tại: ${currentTotalText})\nVD: 5tr, 10000000, 500k, 0:`);
+  if (input === null || input.trim() === '') return;
+
+  try {
+    const res = await fetch('/api/finance/total-money', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId: myChatId, amount: input.trim() })
+    });
+    const result = await res.json();
+    if (result.success) {
+      loadFinanceOverview();
+      loadTransactions(currentFinanceFilter);
+    } else {
+      alert('Lỗi: ' + (result.error || 'Không thể cập nhật tổng số tiền'));
+    }
+  } catch (err) {
+    alert('Lỗi kết nối khi cập nhật tổng số tiền');
+  }
+}
+
 // Chọn loại giao dịch (Chi tiêu hay Thu nhập)
 function selectTransType(type) {
   currentTransType = type;

@@ -163,6 +163,19 @@ app.put('/api/finance/funds/:id/balance', async (req, res) => {
   }
 });
 
+// Chỉnh sửa tổng số tiền qua Web
+app.put('/api/finance/total-money', async (req, res) => {
+  try {
+    const { chatId, amount } = req.body;
+    if (!chatId) return res.status(401).json({ error: 'Missing chatId' });
+
+    const result = await financeService.updateTotalMoney(chatId, amount);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Lấy danh sách giao dịch
 app.get('/api/finance/transactions', async (req, res) => {
   try {

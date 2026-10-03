@@ -161,13 +161,20 @@ async function ensureUserFundsAndRollover(chatId) {
   if (stateRes.rows.length === 0) {
     // Lần đầu khởi tạo
     await db.execute({
-      sql: `INSERT INTO user_finance_state (chat_id, last_week_key, last_month_key, updated_at) VALUES (?, ?, ?, ?)`,
-      args: [chatId, weekKey, monthKey, Date.now()]
+      sql: `INSERT INTO user_finance_state (chat_id, last_week_key, last_month_key, total_money, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      args: [chatId, weekKey, monthKey, 0, Date.now()]
     });
     return { rolledOverWeek: false, rolledOverMonth: false };
   }
 
   const userState = stateRes.rows[0];
+  if (userState.total_money === null || userState.total_money === undefined) {
+    await db.execute({
+      sql: `UPDATE user_finance_state SET total_money = 0 WHERE chat_id = ?`,
+      args: [chatId]
+    });
+    userState.total_money = 0;
+  }
   let rolledOverWeek = false;
   let rolledOverMonth = false;
 
@@ -304,6 +311,28 @@ async function getFunds(chatId) {
   return res.rows;
 }
 
+/**
+ * Tính toán mức tác động lên Tổng tiền dựa theo Quỹ và mức biến động của quỹ (fundDelta).
+ * 
+ * Quy tắc:
+ * "Và mọi tác động đến quỹ đều sẽ tác động đến tổng số tiền của tôi
+ * (tổng tiền không nhất thiết phải bằng tổng các quỹ cộng lại),
+ * khi quỹ nợ được cộng thì tổng tiền sẽ bị trừ"
+ * 
+ * 1. Quỹ 'Trả nợ':
+ *    - Quỹ nợ được cộng (fundDelta > 0, vd: trả nợ) => Tổng tiền BỊ TRỪ (-fundDelta)
+ *    - Quỹ nợ bị trừ (fundDelta < 0, vd: vay thêm) => Tổng tiền ĐƯỢC CỘNG (+Math.abs(fundDelta))
+ * 2. Các quỹ khác ('Tiêu dùng', 'Phát sinh', 'Tiết kiệm'):
+ *    - Quỹ được cộng (fundDelta > 0) => Tổng tiền ĐƯỢC CỘNG (+fundDelta)
+ *    - Quỹ bị trừ (fundDelta < 0) => Tổng tiền BỊ TRỪ (-Math.abs(fundDelta))
+ */
+function calculateTotalMoneyImpact(fundName, fundDelta) {
+  if (fundName === STANDARD_FUNDS.DEBT) {
+    return -fundDelta;
+  }
+  return fundDelta;
+}
+
 // Chỉnh sửa số dư của bất kỳ quỹ nào qua Web
 async function updateFundBalance(chatId, fundIdentifier, newBalanceStr) {
   await ensureUserFundsAndRollover(chatId);
@@ -322,15 +351,24 @@ async function updateFundBalance(chatId, fundIdentifier, newBalanceStr) {
 
   const fund = fundRes.rows[0];
   const oldBalance = Number(fund.balance);
+  const delta = newBalance - oldBalance;
 
-  // Cập nhật số dư mới
+  // Cập nhật số dư mới của quỹ
   await db.execute({
     sql: `UPDATE funds SET balance = ? WHERE id = ? AND chat_id = ?`,
     args: [newBalance, fund.id, chatId]
   });
 
+  // Tác động lên Tổng tiền của user
+  const totalImpact = calculateTotalMoneyImpact(fund.name, delta);
+  if (totalImpact !== 0) {
+    await db.execute({
+      sql: `UPDATE user_finance_state SET total_money = COALESCE(total_money, 0) + ?, updated_at = ? WHERE chat_id = ?`,
+      args: [totalImpact, Date.now(), chatId]
+    });
+  }
+
   // Ghi lại vết giao dịch điều chỉnh
-  const delta = newBalance - oldBalance;
   await db.execute({
     sql: `INSERT INTO transactions (chat_id, type, amount, description, fund_name, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
     args: [
@@ -347,6 +385,46 @@ async function updateFundBalance(chatId, fundIdentifier, newBalanceStr) {
   return {
     success: true,
     fund: { ...fund, balance: newBalance },
+    overview
+  };
+}
+
+// Chỉnh sửa tổng số tiền trực tiếp qua Web
+async function updateTotalMoney(chatId, newAmountStr) {
+  await ensureUserFundsAndRollover(chatId);
+
+  const newAmount = parseSignedAmount(newAmountStr);
+
+  const stateRes = await db.execute({
+    sql: `SELECT total_money FROM user_finance_state WHERE chat_id = ?`,
+    args: [chatId]
+  });
+  const oldAmount = stateRes.rows[0] ? Number(stateRes.rows[0].total_money || 0) : 0;
+
+  await db.execute({
+    sql: `UPDATE user_finance_state SET total_money = ?, updated_at = ? WHERE chat_id = ?`,
+    args: [newAmount, Date.now(), chatId]
+  });
+
+  const delta = newAmount - oldAmount;
+  if (delta !== 0) {
+    await db.execute({
+      sql: `INSERT INTO transactions (chat_id, type, amount, description, fund_name, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      args: [
+        chatId,
+        delta >= 0 ? 'income' : 'expense',
+        Math.abs(delta),
+        `Điều chỉnh tổng số tiền (${formatMoney(oldAmount)} -> ${formatMoney(newAmount)})`,
+        'Tổng tiền',
+        Date.now()
+      ]
+    });
+  }
+
+  const overview = await getOverview(chatId);
+  return {
+    success: true,
+    totalBalance: newAmount,
     overview
   };
 }
@@ -390,6 +468,15 @@ async function addTransaction(chatId, { type, amount, description, fundName, tra
     args: [balanceDelta, chatId, targetFundName]
   });
 
+  // Cập nhật Tổng tiền theo tác động của Quỹ (khi quỹ nợ cộng thì tổng tiền trừ, v.v.)
+  const totalImpact = calculateTotalMoneyImpact(targetFundName, balanceDelta);
+  if (totalImpact !== 0) {
+    await db.execute({
+      sql: `UPDATE user_finance_state SET total_money = COALESCE(total_money, 0) + ?, updated_at = ? WHERE chat_id = ?`,
+      args: [totalImpact, Date.now(), chatId]
+    });
+  }
+
   // Lấy số dư mới của quỹ vừa thao tác
   const updatedFundRes = await db.execute({
     sql: `SELECT balance FROM funds WHERE chat_id = ? AND name = ?`,
@@ -414,7 +501,7 @@ async function addTransaction(chatId, { type, amount, description, fundName, tra
   };
 }
 
-// Xóa giao dịch (hoàn lại số dư quỹ tương ứng)
+// Xóa giao dịch (hoàn lại số dư quỹ tương ứng và hoàn tác tác động lên tổng tiền)
 async function deleteTransaction(chatId, transactionId) {
   const transRes = await db.execute({
     sql: `SELECT * FROM transactions WHERE id = ? AND chat_id = ?`,
@@ -433,6 +520,15 @@ async function deleteTransaction(chatId, transactionId) {
     sql: `UPDATE funds SET balance = balance + ? WHERE chat_id = ? AND name = ?`,
     args: [refundDelta, chatId, tx.fund_name]
   });
+
+  // Hoàn tác tác động lên Tổng tiền
+  const totalImpact = calculateTotalMoneyImpact(tx.fund_name, refundDelta);
+  if (totalImpact !== 0) {
+    await db.execute({
+      sql: `UPDATE user_finance_state SET total_money = COALESCE(total_money, 0) + ?, updated_at = ? WHERE chat_id = ?`,
+      args: [totalImpact, Date.now(), chatId]
+    });
+  }
 
   // Xóa giao dịch
   await db.execute({
@@ -472,8 +568,15 @@ async function getTransactions(chatId, options = {}) {
 
 // Lấy tổng quan tài chính cho user
 async function getOverview(chatId) {
+  await ensureUserFundsAndRollover(chatId);
   const funds = await getFunds(chatId);
-  const totalBalance = funds.reduce((sum, f) => sum + Number(f.balance || 0), 0);
+
+  // Lấy tổng số tiền thực tế từ user_finance_state (tổng tiền không nhất thiết phải bằng tổng các quỹ cộng lại)
+  const stateRes = await db.execute({
+    sql: `SELECT total_money FROM user_finance_state WHERE chat_id = ?`,
+    args: [chatId]
+  });
+  const totalBalance = stateRes.rows[0] ? Number(stateRes.rows[0].total_money || 0) : 0;
 
   const spendingFund = funds.find(f => f.name === STANDARD_FUNDS.SPENDING);
   const extraFund = funds.find(f => f.name === STANDARD_FUNDS.EXTRA);
@@ -526,10 +629,12 @@ module.exports = {
   getCurrentMonthKey,
   parseAmount,
   formatMoney,
+  calculateTotalMoneyImpact,
   ensureUserFundsAndRollover,
   checkAllUsersWeeklyRollover,
   getFunds,
   updateFundBalance,
+  updateTotalMoney,
   addTransaction,
   deleteTransaction,
   getTransactions,

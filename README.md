@@ -80,7 +80,11 @@ Xong! Hệ thống của bạn đã chạy 24/7 hoàn toàn tự động và mi�
 
 ### 4. Giao diện Web:
 - Chuyển đổi giữa 2 tab: `DEADLINE` và `TÀI CHÍNH 4 QUỸ`.
-- **Chỉnh sửa số dư:** Cho phép bấm nút `[Sửa số dư]` ở bất kỳ quỹ nào để cập nhật số dư mong muốn trực tiếp (nhập dạng `500k`, `-700k`, `1000000`, v.v.).
+- **Tổng số tiền thực tế:** Quản lý số tiền thực tế độc lập (không nhất thiết phải bằng tổng các quỹ cộng lại). Cho phép bấm `[Sửa tổng tiền]` để chỉnh sửa số tiền thực tế bất kỳ lúc nào.
+- **Quy tắc liên kết giữa Quỹ và Tổng tiền:** Mọi tác động đến quỹ đều tác động đến tổng tiền:
+  - Quỹ Tiêu dùng, Phát sinh, Tiết kiệm: Khi quỹ tăng -> tổng tiền tăng; khi quỹ giảm -> tổng tiền giảm.
+  - Quỹ Trả nợ: Khi quỹ nợ được cộng (trả nợ) -> tổng tiền bị trừ; khi quỹ nợ bị trừ -> tổng tiền được cộng.
+- **Chỉnh sửa số dư từng quỹ:** Cho phép bấm nút `[Sửa số dư]` ở bất kỳ quỹ nào để cập nhật số dư mong muốn trực tiếp (nhập dạng `500k`, `-700k`, `1000000`, v.v.).
 - Hiển thị trực quan 4 quỹ dạng chữ phẳng (không emoji/icon), hạn mức tuần và tháng.
 - Lịch sử giao dịch & vết tự động kết chuyển số dư.
 

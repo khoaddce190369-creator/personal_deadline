@@ -106,7 +106,7 @@ bot.on('message', async (msg) => {
     ) {
       const overview = await financeService.getOverview(chatId);
       let reply = `💰 **TÌNH HÌNH TÀI CHÍNH HIỆN TẠI**\n\n`;
-      reply += `💳 **Tổng tài sản (4 quỹ):** \`${formatMoney(overview.totalBalance)}\`\n\n`;
+      reply += `💳 **Tổng số tiền:** \`${formatMoney(overview.totalBalance)}\`\n\n`;
 
       reply += `📊 **Tiến độ tuần (${overview.weekInfo.label}):**\n`;
       reply += `• Hạn mức cấp tuần: \`${formatMoney(overview.weeklyBudget)}\` (500k + 100k)\n`;
@@ -219,7 +219,7 @@ bot.on('callback_query', async (query) => {
                      + `🏦 Quỹ: *${result.fund_name}* (Số dư mới: \`${formatMoney(result.fund_balance)}\`)\n`
                      + `📝 Nội dung: *${result.description}*\n`
                      + `🕒 Thời gian: *${formatTime(result.created_at)}*\n\n`
-                     + `💳 **Tổng tài sản:** \`${formatMoney(result.total_balance)}\`\n`
+                     + `💳 **Tổng số tiền:** \`${formatMoney(result.total_balance)}\`\n`
                      + `📉 **Còn lại tuần này:** \`${formatMoney(result.remaining_week)}\``;
 
       bot.editMessageText(confirmMsg, { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown' });

@@ -72,12 +72,13 @@ async function initDb() {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_budgets_chat_week ON weekly_budgets (chat_id, week_key)
     `);
 
-    // Bảng lưu trạng thái chu kỳ tuần và tháng để reset quỹ và kết chuyển số dư
+    // Bảng lưu trạng thái chu kỳ tuần và tháng, cùng tổng số tiền thực tế của user
     await db.execute(`
       CREATE TABLE IF NOT EXISTS user_finance_state (
         chat_id TEXT PRIMARY KEY,
         last_week_key TEXT NOT NULL,
         last_month_key TEXT,
+        total_money REAL DEFAULT 0,
         updated_at INTEGER
       )
     `);
@@ -85,6 +86,11 @@ async function initDb() {
       await db.execute(`ALTER TABLE user_finance_state ADD COLUMN last_month_key TEXT`);
     } catch (_) {
       // Đã có cột last_month_key
+    }
+    try {
+      await db.execute(`ALTER TABLE user_finance_state ADD COLUMN total_money REAL DEFAULT 0`);
+    } catch (_) {
+      // Đã có cột total_money
     }
     
     // Đảm bảo Admin luôn được phép dùng bot mà không cần mã mời
