@@ -172,14 +172,21 @@ app.get('/api/finance/transactions', async (req, res) => {
 // Thêm giao dịch mới (Thu nhập hoặc Chi tiêu)
 app.post('/api/finance/transactions', async (req, res) => {
   try {
-    const { chatId, type, amount, description, fundName } = req.body;
+    const { chatId, type, amount, description, fundName, transactionTime, timeStr } = req.body;
     if (!chatId) return res.status(401).json({ error: 'Missing chatId' });
+
+    let finalTime = transactionTime;
+    if (!finalTime && timeStr) {
+      const { parseDateTime } = require('./utils/parser');
+      finalTime = parseDateTime(timeStr);
+    }
 
     const result = await financeService.addTransaction(chatId, {
       type,
       amount,
       description,
-      fundName
+      fundName,
+      transactionTime: finalTime
     });
 
     res.json({ success: true, ...result });
@@ -202,10 +209,11 @@ app.delete('/api/finance/transactions/:id', async (req, res) => {
   }
 });
 
-// Internal Cron
+// Internal Cron (kiểm tra nhắc hẹn deadline & tự động kết chuyển quỹ tuần mới)
 setInterval(async () => {
   try {
     await reminderService.checkReminders();
+    await financeService.checkAllUsersWeeklyRollover();
   } catch (err) {
     console.error('Lỗi khi chạy internal cron:', err);
   }

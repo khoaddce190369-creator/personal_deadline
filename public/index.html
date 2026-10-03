@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quản lý Deadline & Tiền bạc</title>
+  <title>Quản lý Deadline & Tài chính 3 Quỹ</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
   <div class="container" id="login-container">
     <header>
       <h1>HỆ THỐNG TRỢ LÝ</h1>
-      <p>Quản lý Deadline & Tài chính cá nhân</p>
+      <p>Quản lý Deadline & Tài chính 3 Quỹ</p>
       <p style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">Nhập ID và mã PIN lấy từ Bot Telegram (/web)</p>
     </header>
     <div class="login-box">
@@ -34,7 +34,7 @@
     <!-- Thanh chuyển đổi tính năng: Deadline vs Quản lý Tiền -->
     <div class="nav-switch">
       <button class="nav-btn active" id="nav-deadline-btn" onclick="switchSection('deadline')">⏰ DEADLINE</button>
-      <button class="nav-btn" id="nav-finance-btn" onclick="switchSection('finance')">💰 QUẢN LÝ TIỀN</button>
+      <button class="nav-btn" id="nav-finance-btn" onclick="switchSection('finance')">💰 TÀI CHÍNH 3 QUỸ</button>
     </div>
 
     <!-- ================= SECTION 1: DEADLINE ================= -->
@@ -49,36 +49,36 @@
       </div>
     </div>
 
-    <!-- ================= SECTION 2: QUẢN LÝ TIỀN BẠC ================= -->
+    <!-- ================= SECTION 2: QUẢN LÝ TIỀN BẠC (3 QUỸ) ================= -->
     <div id="section-finance" style="display: none;">
       
       <!-- 1. Thống kê tổng quan -->
       <div class="finance-overview-grid">
         <!-- Tổng tài sản -->
         <div class="stat-card">
-          <div class="stat-title">💳 TỔNG TIỀN TẤT CẢ QUỸ</div>
+          <div class="stat-title">💳 TỔNG TÀI SẢN (3 QUỸ)</div>
           <div class="stat-value neon" id="total-balance-display">0 đ</div>
-          <div class="stat-sub" id="funds-count-display">0 quỹ đang hoạt động</div>
+          <div class="stat-sub">Tiêu dùng (500k) + Phát sinh (100k) + Tiết kiệm</div>
         </div>
 
         <!-- Hạn mức chi tiêu tuần -->
         <div class="stat-card">
           <div class="stat-header-row">
-            <div class="stat-title">📅 CHI TIÊU TUẦN (<span id="week-label-display">Hiện tại</span>)</div>
-            <button class="btn-small" onclick="openBudgetModal()">✏️ Đặt hạn mức</button>
+            <div class="stat-title">📅 TIẾN ĐỘ TUẦN NÀY (<span id="week-label-display">Hiện tại</span>)</div>
+            <span class="badge-tag">Hết tuần tự dồn dư sang Tiết kiệm</span>
           </div>
           <div class="budget-stat-row">
             <div>
-              <span class="budget-label">Hạn mức:</span>
-              <span class="budget-val" id="weekly-budget-display">0 đ</span>
+              <span class="budget-label">Hạn mức tuần:</span>
+              <span class="budget-val" id="weekly-budget-display">600,000 đ</span>
             </div>
             <div>
-              <span class="budget-label">Đã chi:</span>
+              <span class="budget-label">Đã chi tuần này:</span>
               <span class="budget-val" id="weekly-spent-display" style="color: var(--danger);">0 đ</span>
             </div>
             <div>
-              <span class="budget-label">Còn lại:</span>
-              <span class="budget-val" id="weekly-remaining-display">0 đ</span>
+              <span class="budget-label">Còn lại tuần này:</span>
+              <span class="budget-val" id="weekly-remaining-display">600,000 đ</span>
             </div>
           </div>
 
@@ -86,30 +86,18 @@
           <div class="progress-bar-container">
             <div class="progress-bar-fill" id="budget-progress-bar" style="width: 0%;"></div>
           </div>
-          <div class="progress-info" id="budget-progress-text">Chưa đặt hạn mức tuần</div>
+          <div class="progress-info" id="budget-progress-text">Đã chi tiêu trong tuần</div>
         </div>
       </div>
 
-      <!-- 2. Quản lý Quỹ -->
+      <!-- 2. Danh sách 3 Quỹ cố định -->
       <div class="section-box">
         <div class="section-box-header">
-          <h3>🏦 CÁC QUỸ QUẢN LÝ CHI TRẢ</h3>
-          <button class="btn-small btn-accent" onclick="toggleFundForm()">➕ Tạo Quỹ Mới</button>
+          <h3>🏦 3 QUỸ QUẢN LÝ TIỀN TỆ</h3>
         </div>
 
-        <!-- Form tạo quỹ mới (mặc định ẩn) -->
-        <div id="new-fund-form" class="inline-form" style="display: none;">
-          <input type="text" id="fund-name-input" placeholder="Tên quỹ (VD: Ăn uống, Tiết kiệm...)" class="input-field">
-          <input type="text" id="fund-init-balance-input" placeholder="Số dư ban đầu (VD: 500k hoặc 500000)" class="input-field">
-          <div class="form-btn-group">
-            <button class="btn-main" onclick="handleCreateFund()">Lưu Quỹ</button>
-            <button class="btn-del" onclick="toggleFundForm()">Hủy</button>
-          </div>
-        </div>
-
-        <!-- Danh sách thẻ Quỹ -->
         <div id="funds-list" class="funds-grid">
-          <!-- Load các quỹ ở đây -->
+          <!-- Load 3 quỹ ở đây -->
         </div>
       </div>
 
@@ -130,13 +118,18 @@
           </div>
 
           <div class="form-row">
-            <input type="text" id="trans-amount-input" placeholder="Số tiền (VD: 45k hoặc 45000)" class="input-field">
+            <input type="text" id="trans-amount-input" placeholder="Số tiền (VD: 50k, 100k, 50000)" class="input-field">
             <select id="trans-fund-select" class="input-field">
-              <option value="Quỹ chung">Quỹ chung</option>
+              <option value="Tiêu dùng">🛒 Tiêu dùng (500k/tuần)</option>
+              <option value="Phát sinh">⚡ Phát sinh (100k/tuần)</option>
+              <option value="Tiết kiệm">🐷 Tiết kiệm (Tích lũy)</option>
             </select>
           </div>
 
-          <input type="text" id="trans-desc-input" placeholder="Nội dung (VD: Cơm trưa, Xăng xe, Tiền thưởng...)" class="input-field">
+          <div class="form-row">
+            <input type="text" id="trans-desc-input" placeholder="Nội dung (VD: ăn trưa, gym, tiền mừng...)" class="input-field" style="flex: 2;">
+            <input type="text" id="trans-time-input" placeholder="Thời gian (VD: 12/00 hoặc để trống)" class="input-field" style="flex: 1;">
+          </div>
           
           <button class="btn-main" onclick="handleAddTransaction()" style="width: 100%; margin-top: 5px;">
             LƯU GIAO DỊCH
@@ -147,14 +140,14 @@
       <!-- 4. Lịch sử giao dịch -->
       <div class="section-box">
         <div class="section-box-header">
-          <h3>📜 LỊCH SỬ GIAO DỊCH</h3>
+          <h3>📜 LỊCH SỬ THU / CHI & KẾT CHUYỂN</h3>
         </div>
 
         <!-- Bộ lọc lịch sử -->
         <div class="tabs filter-tabs">
           <button class="tab-btn active" onclick="loadTransactions('all')">TẤT CẢ</button>
           <button class="tab-btn" onclick="loadTransactions('expense')">CHI TIÊU (-)</button>
-          <button class="tab-btn" onclick="loadTransactions('income')">THU NHẬP (+)</button>
+          <button class="tab-btn" onclick="loadTransactions('income')">THU / DƯ (+)</button>
           <button class="tab-btn" onclick="loadTransactions('week')">TUẦN NÀY</button>
         </div>
 

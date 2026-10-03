@@ -6,6 +6,17 @@ const timezone = require('dayjs/plugin/timezone');
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
+const STANDARD_FUNDS = {
+  SPENDING: 'Tiêu dùng',
+  SAVINGS: 'Tiết kiệm',
+  EXTRA: 'Phát sinh'
+};
+
+const WEEKLY_ALLOWANCES = {
+  [STANDARD_FUNDS.SPENDING]: 500000, // 500k / tuần
+  [STANDARD_FUNDS.EXTRA]: 100000     // 100k / tuần
+};
+
 // Lấy thông tin tuần hiện tại (Thứ Hai 00:00:00 -> Chủ Nhật 23:59:59.999 theo múi giờ VN)
 function getCurrentWeekRange() {
   const now = dayjs().tz('Asia/Ho_Chi_Minh');
@@ -69,157 +80,220 @@ function formatMoney(amount) {
   return num.toLocaleString('vi-VN') + ' đ';
 }
 
-// Lấy danh sách các quỹ của người dùng
-async function getFunds(chatId) {
-  const res = await db.execute({
-    sql: `SELECT * FROM funds WHERE chat_id = ? ORDER BY id ASC`,
+/**
+ * Đảm bảo user có ĐÚNG 3 QUỸ và tự động xử lý kết chuyển cuối tuần:
+ * 1. Tiêu dùng: 500k/tuần, hết tuần dư bao nhiêu chuyển sang Tiết kiệm, reset lại 500k.
+ * 2. Phát sinh: 100k/tuần, hết tuần dư bao nhiêu chuyển sang Tiết kiệm, reset lại 100k.
+ * 3. Tiết kiệm: Nhận tiền dư chuyển sang và tiền nạp, tích lũy không reset.
+ */
+async function ensureUserFundsAndRollover(chatId) {
+  const { weekKey } = getCurrentWeekRange();
+
+  // 1. Dọn dẹp các quỹ cũ không thuộc 3 quỹ chuẩn (nếu có từ trước)
+  const allFundsRes = await db.execute({
+    sql: `SELECT * FROM funds WHERE chat_id = ?`,
     args: [chatId]
   });
 
-  // Nếu người dùng chưa có quỹ nào, tạo sẵn 1 Quỹ chung mặc định
-  if (res.rows.length === 0) {
-    const defaultFund = await createFund(chatId, 'Quỹ chung', 0);
-    return [defaultFund];
+  const existingFundsMap = new Map();
+  for (const row of allFundsRes.rows) {
+    if (
+      row.name === STANDARD_FUNDS.SPENDING ||
+      row.name === STANDARD_FUNDS.SAVINGS ||
+      row.name === STANDARD_FUNDS.EXTRA
+    ) {
+      existingFundsMap.set(row.name, row);
+    } else {
+      // Xóa các quỹ không thuộc 3 quỹ chuẩn
+      await db.execute({
+        sql: `DELETE FROM funds WHERE id = ? AND chat_id = ?`,
+        args: [row.id, chatId]
+      });
+    }
   }
+
+  // 2. Tạo 3 quỹ nếu chưa tồn tại
+  if (!existingFundsMap.has(STANDARD_FUNDS.SPENDING)) {
+    await db.execute({
+      sql: `INSERT INTO funds (chat_id, name, balance, created_at) VALUES (?, ?, ?, ?)`,
+      args: [chatId, STANDARD_FUNDS.SPENDING, WEEKLY_ALLOWANCES[STANDARD_FUNDS.SPENDING], Date.now()]
+    });
+  }
+  if (!existingFundsMap.has(STANDARD_FUNDS.SAVINGS)) {
+    await db.execute({
+      sql: `INSERT INTO funds (chat_id, name, balance, created_at) VALUES (?, ?, ?, ?)`,
+      args: [chatId, STANDARD_FUNDS.SAVINGS, 0, Date.now()]
+    });
+  }
+  if (!existingFundsMap.has(STANDARD_FUNDS.EXTRA)) {
+    await db.execute({
+      sql: `INSERT INTO funds (chat_id, name, balance, created_at) VALUES (?, ?, ?, ?)`,
+      args: [chatId, STANDARD_FUNDS.EXTRA, WEEKLY_ALLOWANCES[STANDARD_FUNDS.EXTRA], Date.now()]
+    });
+  }
+
+  // 3. Kiểm tra chu kỳ tuần trong `user_finance_state`
+  const stateRes = await db.execute({
+    sql: `SELECT * FROM user_finance_state WHERE chat_id = ?`,
+    args: [chatId]
+  });
+
+  if (stateRes.rows.length === 0) {
+    // Lần đầu khởi tạo
+    await db.execute({
+      sql: `INSERT INTO user_finance_state (chat_id, last_week_key, updated_at) VALUES (?, ?, ?)`,
+      args: [chatId, weekKey, Date.now()]
+    });
+    return { rolledOver: false };
+  }
+
+  const userState = stateRes.rows[0];
+
+  // Nếu đã sang tuần mới (weekKey khác với last_week_key) -> Tiến hành Reset & Kết chuyển
+  if (userState.last_week_key !== weekKey) {
+    const prevWeek = userState.last_week_key;
+
+    // Lấy số dư hiện tại của Tiêu dùng và Phát sinh
+    const spendingRes = await db.execute({
+      sql: `SELECT balance FROM funds WHERE chat_id = ? AND name = ?`,
+      args: [chatId, STANDARD_FUNDS.SPENDING]
+    });
+    const extraRes = await db.execute({
+      sql: `SELECT balance FROM funds WHERE chat_id = ? AND name = ?`,
+      args: [chatId, STANDARD_FUNDS.EXTRA]
+    });
+
+    const spendingBal = spendingRes.rows[0] ? Number(spendingRes.rows[0].balance) : 0;
+    const extraBal = extraRes.rows[0] ? Number(extraRes.rows[0].balance) : 0;
+
+    let transferredTotal = 0;
+
+    // Kết chuyển tiền dư Quỹ Tiêu dùng sang Tiết kiệm (nếu dư > 0)
+    if (spendingBal > 0) {
+      await db.execute({
+        sql: `UPDATE funds SET balance = balance + ? WHERE chat_id = ? AND name = ?`,
+        args: [spendingBal, chatId, STANDARD_FUNDS.SAVINGS]
+      });
+      await db.execute({
+        sql: `INSERT INTO transactions (chat_id, type, amount, description, fund_name, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [
+          chatId,
+          'income',
+          spendingBal,
+          `Dư tuần ${prevWeek} (Quỹ Tiêu dùng -> Tiết kiệm)`,
+          STANDARD_FUNDS.SAVINGS,
+          Date.now()
+        ]
+      });
+      transferredTotal += spendingBal;
+    }
+
+    // Kết chuyển tiền dư Quỹ Phát sinh sang Tiết kiệm (nếu dư > 0)
+    if (extraBal > 0) {
+      await db.execute({
+        sql: `UPDATE funds SET balance = balance + ? WHERE chat_id = ? AND name = ?`,
+        args: [extraBal, chatId, STANDARD_FUNDS.SAVINGS]
+      });
+      await db.execute({
+        sql: `INSERT INTO transactions (chat_id, type, amount, description, fund_name, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [
+          chatId,
+          'income',
+          extraBal,
+          `Dư tuần ${prevWeek} (Quỹ Phát sinh -> Tiết kiệm)`,
+          STANDARD_FUNDS.SAVINGS,
+          Date.now()
+        ]
+      });
+      transferredTotal += extraBal;
+    }
+
+    // Reset lại 2 quỹ theo định mức tuần mới
+    await db.execute({
+      sql: `UPDATE funds SET balance = ? WHERE chat_id = ? AND name = ?`,
+      args: [WEEKLY_ALLOWANCES[STANDARD_FUNDS.SPENDING], chatId, STANDARD_FUNDS.SPENDING]
+    });
+    await db.execute({
+      sql: `UPDATE funds SET balance = ? WHERE chat_id = ? AND name = ?`,
+      args: [WEEKLY_ALLOWANCES[STANDARD_FUNDS.EXTRA], chatId, STANDARD_FUNDS.EXTRA]
+    });
+
+    // Cập nhật tuần mới vào user_finance_state
+    await db.execute({
+      sql: `UPDATE user_finance_state SET last_week_key = ?, updated_at = ? WHERE chat_id = ?`,
+      args: [weekKey, Date.now(), chatId]
+    });
+
+    return {
+      rolledOver: true,
+      previousWeek: prevWeek,
+      transferredTotal
+    };
+  }
+
+  return { rolledOver: false };
+}
+
+// Kiểm tra rollover cho tất cả các user (dành cho cron job chạy ngầm định kỳ)
+async function checkAllUsersWeeklyRollover() {
+  const usersRes = await db.execute(`SELECT chat_id FROM allowed_users`);
+  for (const user of usersRes.rows) {
+    try {
+      await ensureUserFundsAndRollover(user.chat_id);
+    } catch (err) {
+      console.error(`Lỗi rollover cho user ${user.chat_id}:`, err.message);
+    }
+  }
+}
+
+// Lấy danh sách đúng 3 quỹ
+async function getFunds(chatId) {
+  await ensureUserFundsAndRollover(chatId);
+
+  const res = await db.execute({
+    sql: `SELECT * FROM funds WHERE chat_id = ? ORDER BY 
+          CASE name 
+            WHEN 'Tiêu dùng' THEN 1 
+            WHEN 'Phát sinh' THEN 2 
+            WHEN 'Tiết kiệm' THEN 3 
+            ELSE 4 
+          END ASC`,
+    args: [chatId]
+  });
 
   return res.rows;
 }
 
-// Tạo quỹ mới
-async function createFund(chatId, name, initialBalance = 0) {
-  const trimmedName = (name || 'Quỹ chung').trim();
-  const initBal = parseAmount(initialBalance);
-
-  // Kiểm tra xem quỹ đã tồn tại chưa
-  const existing = await db.execute({
-    sql: `SELECT * FROM funds WHERE chat_id = ? AND name = ?`,
-    args: [chatId, trimmedName]
-  });
-
-  if (existing.rows.length > 0) {
-    return existing.rows[0];
-  }
-
-  const result = await db.execute({
-    sql: `INSERT INTO funds (chat_id, name, balance, created_at) VALUES (?, ?, ?, ?)`,
-    args: [chatId, trimmedName, initBal, Date.now()]
-  });
-
-  return {
-    id: result.lastInsertRowid,
-    chat_id: chatId,
-    name: trimmedName,
-    balance: initBal,
-    created_at: Date.now()
-  };
-}
-
-// Xóa quỹ
-async function deleteFund(chatId, fundId) {
-  await db.execute({
-    sql: `DELETE FROM funds WHERE id = ? AND chat_id = ?`,
-    args: [fundId, chatId]
-  });
-  return { success: true };
-}
-
-// Cài đặt hạn mức chi tiêu cho tuần
-async function setWeeklyBudget(chatId, amount, weekKey = null) {
-  const budgetNum = parseAmount(amount);
-  const targetWeek = weekKey || getCurrentWeekRange().weekKey;
-
-  // Cập nhật hoặc thêm mới cho tuần chỉ định
-  await db.execute({
-    sql: `INSERT INTO weekly_budgets (chat_id, week_key, amount, created_at) 
-          VALUES (?, ?, ?, ?)
-          ON CONFLICT(chat_id, week_key) DO UPDATE SET amount = ?`,
-    args: [chatId, targetWeek, budgetNum, Date.now(), budgetNum]
-  });
-
-  // Đồng thời lưu làm hạn mức mặc định (default) nếu các tuần sau chưa đặt
-  await db.execute({
-    sql: `INSERT INTO weekly_budgets (chat_id, week_key, amount, created_at) 
-          VALUES (?, 'default', ?, ?)
-          ON CONFLICT(chat_id, week_key) DO UPDATE SET amount = ?`,
-    args: [chatId, budgetNum, Date.now(), budgetNum]
-  });
-
-  return { weekKey: targetWeek, amount: budgetNum };
-}
-
-// Lấy hạn mức chi tiêu tuần này
-async function getWeeklyBudget(chatId) {
-  const { weekKey } = getCurrentWeekRange();
-  
-  // Ưu tiên tuần hiện tại, nếu chưa có thì lấy 'default'
-  const res = await db.execute({
-    sql: `SELECT amount FROM weekly_budgets 
-          WHERE chat_id = ? AND (week_key = ? OR week_key = 'default')
-          ORDER BY CASE WHEN week_key = ? THEN 1 ELSE 2 END LIMIT 1`,
-    args: [chatId, weekKey, weekKey]
-  });
-
-  return res.rows.length > 0 ? Number(res.rows[0].amount) : 0;
-}
-
-// Lấy tổng chi tiêu trong tuần hiện tại
-async function getWeeklySpending(chatId) {
-  const { startOfWeek, endOfWeek } = getCurrentWeekRange();
-
-  const res = await db.execute({
-    sql: `SELECT SUM(amount) as total_spent FROM transactions 
-          WHERE chat_id = ? AND type = 'expense' AND created_at >= ? AND created_at <= ?`,
-    args: [chatId, startOfWeek, endOfWeek]
-  });
-
-  return (res.rows[0] && res.rows[0].total_spent) ? Number(res.rows[0].total_spent) : 0;
-}
-
-// Lấy tổng thu nhập trong tuần hiện tại
-async function getWeeklyIncome(chatId) {
-  const { startOfWeek, endOfWeek } = getCurrentWeekRange();
-
-  const res = await db.execute({
-    sql: `SELECT SUM(amount) as total_income FROM transactions 
-          WHERE chat_id = ? AND type = 'income' AND created_at >= ? AND created_at <= ?`,
-    args: [chatId, startOfWeek, endOfWeek]
-  });
-
-  return (res.rows[0] && res.rows[0].total_income) ? Number(res.rows[0].total_income) : 0;
-}
-
 // Thêm một giao dịch (Thu / Chi)
-async function addTransaction(chatId, { type, amount, description, fundName }) {
+async function addTransaction(chatId, { type, amount, description, fundName, transactionTime }) {
+  await ensureUserFundsAndRollover(chatId);
+
   const transType = (type === 'income' || type === '+') ? 'income' : 'expense';
   const parsedAmt = parseAmount(amount);
-  const desc = (description || (transType === 'income' ? 'Thu nhập' : 'Chi tiêu')).trim();
-  const targetFundName = (fundName || 'Quỹ chung').trim();
+  const time = transactionTime ? Number(transactionTime) : Date.now();
 
   if (parsedAmt <= 0) {
     throw new Error('Số tiền phải lớn hơn 0');
   }
 
-  // Đảm bảo Quỹ đã tồn tại, nếu chưa có thì tạo mới
-  let fundRes = await db.execute({
-    sql: `SELECT * FROM funds WHERE chat_id = ? AND name = ?`,
-    args: [chatId, targetFundName]
-  });
-
-  if (fundRes.rows.length === 0) {
-    await createFund(chatId, targetFundName, 0);
-    fundRes = await db.execute({
-      sql: `SELECT * FROM funds WHERE chat_id = ? AND name = ?`,
-      args: [chatId, targetFundName]
-    });
+  // Chuẩn hóa tên quỹ: bắt buộc phải là 1 trong 3 quỹ
+  let targetFundName = fundName;
+  if (
+    targetFundName !== STANDARD_FUNDS.SPENDING &&
+    targetFundName !== STANDARD_FUNDS.SAVINGS &&
+    targetFundName !== STANDARD_FUNDS.EXTRA
+  ) {
+    // Nếu không khớp, áp dụng luật: + thì vào Tiết kiệm, - thì vào Tiêu dùng
+    targetFundName = transType === 'income' ? STANDARD_FUNDS.SAVINGS : STANDARD_FUNDS.SPENDING;
   }
 
-  const fund = fundRes.rows[0];
+  const desc = (description || (transType === 'income' ? 'Thu nhập ' + targetFundName : 'Chi tiêu ' + targetFundName)).trim();
 
   // Lưu giao dịch vào database
   const insertRes = await db.execute({
     sql: `INSERT INTO transactions (chat_id, type, amount, description, fund_name, created_at) 
           VALUES (?, ?, ?, ?, ?, ?)`,
-    args: [chatId, transType, parsedAmt, desc, targetFundName, Date.now()]
+    args: [chatId, transType, parsedAmt, desc, targetFundName, time]
   });
 
   // Cập nhật số dư của Quỹ
@@ -229,17 +303,15 @@ async function addTransaction(chatId, { type, amount, description, fundName }) {
     args: [balanceDelta, chatId, targetFundName]
   });
 
-  // Lấy số dư mới của quỹ
+  // Lấy số dư mới của quỹ vừa thao tác
   const updatedFundRes = await db.execute({
     sql: `SELECT balance FROM funds WHERE chat_id = ? AND name = ?`,
     args: [chatId, targetFundName]
   });
   const newFundBalance = updatedFundRes.rows[0] ? Number(updatedFundRes.rows[0].balance) : 0;
 
-  // Lấy thông tin tuần
-  const weeklyBudget = await getWeeklyBudget(chatId);
-  const spentThisWeek = await getWeeklySpending(chatId);
-  const remainingWeek = weeklyBudget - spentThisWeek;
+  // Lấy tổng quan sau khi thêm giao dịch
+  const overview = await getOverview(chatId);
 
   return {
     id: insertRes.lastInsertRowid,
@@ -248,11 +320,10 @@ async function addTransaction(chatId, { type, amount, description, fundName }) {
     amount: parsedAmt,
     description: desc,
     fund_name: targetFundName,
-    created_at: Date.now(),
+    created_at: time,
     fund_balance: newFundBalance,
-    weekly_budget: weeklyBudget,
-    spent_this_week: spentThisWeek,
-    remaining_week: remainingWeek
+    total_balance: overview.totalBalance,
+    remaining_week: overview.remainingWeek
   };
 }
 
@@ -269,7 +340,7 @@ async function deleteTransaction(chatId, transactionId) {
 
   const tx = transRes.rows[0];
   
-  // Hoàn tiền lại cho quỹ: nếu là expense thì cộng lại, nếu là income thì trừ đi
+  // Hoàn tiền lại cho quỹ
   const refundDelta = tx.type === 'expense' ? tx.amount : -tx.amount;
   await db.execute({
     sql: `UPDATE funds SET balance = balance + ? WHERE chat_id = ? AND name = ?`,
@@ -312,15 +383,33 @@ async function getTransactions(chatId, options = {}) {
   return res.rows;
 }
 
-// Lấy toàn bộ tổng quan tài chính
+// Lấy tổng quan tài chính cho user
 async function getOverview(chatId) {
   const funds = await getFunds(chatId);
   const totalBalance = funds.reduce((sum, f) => sum + Number(f.balance || 0), 0);
+
+  const spendingFund = funds.find(f => f.name === STANDARD_FUNDS.SPENDING);
+  const extraFund = funds.find(f => f.name === STANDARD_FUNDS.EXTRA);
+  const savingsFund = funds.find(f => f.name === STANDARD_FUNDS.SAVINGS);
+
+  const spendingBalance = spendingFund ? Number(spendingFund.balance) : 0;
+  const extraBalance = extraFund ? Number(extraFund.balance) : 0;
+  const savingsBalance = savingsFund ? Number(savingsFund.balance) : 0;
+
+  // Hạn mức chi tiêu tuần cố định: 500k (Tiêu dùng) + 100k (Phát sinh) = 600k
+  const weeklyBudget = WEEKLY_ALLOWANCES[STANDARD_FUNDS.SPENDING] + WEEKLY_ALLOWANCES[STANDARD_FUNDS.EXTRA];
   
-  const weeklyBudget = await getWeeklyBudget(chatId);
-  const spentThisWeek = await getWeeklySpending(chatId);
-  const incomeThisWeek = await getWeeklyIncome(chatId);
-  const remainingWeek = weeklyBudget - spentThisWeek;
+  // Số tiền còn lại trong tuần của 2 quỹ chi tiêu (Tiêu dùng + Phát sinh)
+  const remainingWeek = spendingBalance + extraBalance;
+
+  // Tổng tiền đã chi tiêu trong tuần
+  const { startOfWeek, endOfWeek } = getCurrentWeekRange();
+  const spentRes = await db.execute({
+    sql: `SELECT SUM(amount) as total_spent FROM transactions 
+          WHERE chat_id = ? AND type = 'expense' AND created_at >= ? AND created_at <= ?`,
+    args: [chatId, startOfWeek, endOfWeek]
+  });
+  const spentThisWeek = (spentRes.rows[0] && spentRes.rows[0].total_spent) ? Number(spentRes.rows[0].total_spent) : 0;
 
   const weekInfo = getCurrentWeekRange();
   const recentTransactions = await getTransactions(chatId, { limit: 30 });
@@ -329,8 +418,10 @@ async function getOverview(chatId) {
     totalBalance,
     weeklyBudget,
     spentThisWeek,
-    incomeThisWeek,
     remainingWeek,
+    spendingBalance,
+    extraBalance,
+    savingsBalance,
     funds,
     recentTransactions,
     weekInfo
@@ -338,16 +429,14 @@ async function getOverview(chatId) {
 }
 
 module.exports = {
+  STANDARD_FUNDS,
+  WEEKLY_ALLOWANCES,
   getCurrentWeekRange,
   parseAmount,
   formatMoney,
+  ensureUserFundsAndRollover,
+  checkAllUsersWeeklyRollover,
   getFunds,
-  createFund,
-  deleteFund,
-  setWeeklyBudget,
-  getWeeklyBudget,
-  getWeeklySpending,
-  getWeeklyIncome,
   addTransaction,
   deleteTransaction,
   getTransactions,

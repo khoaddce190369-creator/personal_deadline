@@ -42,26 +42,43 @@ Xong! Hệ thống của bạn đã chạy 24/7 hoàn toàn tự động và mi�
 
 ---
 
-## 💰 Tính năng mới: Quản lý Tiền bạc & Ngân sách tuần
+## 💰 Quản lý Tài chính Cá nhân (Hệ thống 3 Quỹ & Tự động kết chuyển tuần)
 
-### 1. Nhập Thu/Chi qua Bot Telegram (Cấu trúc tương tự Deadline, quyết định bằng `+` hoặc `-`):
-- **Chi tiêu (`-`)**:
-  - `-, 45k, Cơm trưa, Ăn uống`
-  - Hoặc: `Cơm trưa, -, 45k, Ăn uống`
-  - Hoặc: `Cơm trưa, -45k, Ăn uống`
-  - *(Nếu không điền tên quỹ, mặc định sẽ vào "Quỹ chung")*
-- **Thu nhập (`+`)**:
-  - `+, 5tr, Lương tháng, Tiết kiệm`
-  - Hoặc: `Thưởng nóng, +500k, Quỹ chung`
+### 1. Quy tắc 3 Quỹ:
+1. **Quỹ Tiêu dùng** (Tag `tiêu dùng`): Cấp **500.000 đ / tuần**. Hết tuần tự động reset lại 500k, tiền còn dư tuần đó được tự động cộng dồn vào **Quỹ Tiết kiệm**.
+2. **Quỹ Phát sinh** (Tag `phát sinh`): Cấp **100.000 đ / tuần** (dành cho gym, trả nợ, việc đột xuất...). Hết tuần tự động reset lại 100k, tiền còn dư tự động chuyển vào **Quỹ Tiết kiệm**.
+3. **Quỹ Tiết kiệm** (Tag `tiết kiệm`): Tích lũy liên tục (nhận tiền nạp trực tiếp & tiền dư từ 2 quỹ mỗi cuối tuần).
 
-### 2. Các lệnh tra cứu nhanh trên Bot Telegram:
-- `/tien` hoặc `/vi`: Xem Tổng tài sản, Chi tiêu tuần này, Số tiền còn lại và Số dư các quỹ.
-- `/setbudget <số tiền>`: Đặt hạn mức chi tiêu cho 1 tuần (VD: `/setbudget 1.5tr` hoặc `/setbudget 1500000`).
-- `/web`: Lấy mã PIN 6 số để đăng nhập vào Web.
+---
 
-### 3. Giao diện Web:
-- Chuyển đổi giữa 2 tab: `⏰ DEADLINE` và `💰 QUẢN LÝ TIỀN`.
-- Xem tổng tiền của tất cả các quỹ, thanh tiến độ hạn mức tuần.
-- Tạo các quỹ riêng với tên tùy chọn (Ăn uống, Sinh hoạt, Tiết kiệm, Học tập...).
-- Ghi nhận giao dịch nhanh và xem lịch sử giao dịch (có thể xóa để hoàn tiền lại vào quỹ).
+### 2. Cú pháp gửi tin nhắn qua Bot Telegram:
+`+/-số tiền, tag, nội dung(tùy chọn), thời gian(tùy chọn)`
+
+> **Quy tắc khi không ghi tag:**
+> - Nếu dấu **`-`** (chi tiêu): Tự động trừ vào **Quỹ Tiêu dùng**.
+> - Nếu dấu **`+`** (thu nhập): Tự động cộng vào **Quỹ Tiết kiệm**.
+
+#### Ví dụ:
+- Chi tiêu dùng: `-50k, tiêu dùng, ăn trưa, 12/00`
+- Chi tiêu tắt không cần tag (tự vào Tiêu dùng): `-45k, cơm trưa`
+- Chi phát sinh: `-30k, phát sinh, gửi xe`
+- Thu nhập / Tiết kiệm: `+100k, tiết kiệm, tiền mừng`
+- Thu nhập tắt không cần tag (tự vào Tiết kiệm): `+500k, làm thêm, 15/30/02/10`
+- Nhập siêu nhanh chỉ có tiền: `-25k` hoặc `+200k`
+
+---
+
+### 3. Các lệnh tra cứu nhanh trên Bot Telegram:
+- `?`: Xem bảng hướng dẫn đầy đủ về cú pháp giao tiếp với bot.
+- `/finance` (hoặc `/tien`, `/vi`): Xem tình hình tài chính hiện tại, số dư 3 quỹ & tiến độ tuần.
+- `/web`: Lấy mã PIN 6 số để đăng nhập vào Web Dashboard.
+- `/start` hoặc `/help`: Khởi động và xem thông tin giới thiệu.
+
+---
+
+### 4. Giao diện Web:
+- Chuyển đổi giữa 2 tab: `⏰ DEADLINE` và `💰 TÀI CHÍNH 3 QUỸ`.
+- Xem tổng tiền của 3 quỹ, thanh tiến độ chi tiêu tuần (hạn mức 600k = 500k Tiêu dùng + 100k Phát sinh).
+- Hiển thị trực quan trạng thái 3 quỹ và ghi chép nhanh giao dịch.
+- Lịch sử giao dịch & vết tự động kết chuyển số dư tuần cũ sang Tiết kiệm.
 

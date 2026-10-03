@@ -46,104 +46,160 @@ function parseAmount(amountStr) {
 function isAmountString(str) {
   if (!str) return false;
   const s = str.trim().toLowerCase().replace(/[+-\s₫đvnd]/g, '');
-  // Không chứa dấu gạch chéo thời gian (/)
   if (str.includes('/')) return false;
   return /^\d+(\.\d+)?(k|tr|trieu|triệu|m|b|ty|tỷ)?$/i.test(s) || /^\d{1,3}(\.\d{3})+$/.test(s);
 }
 
+// Chuẩn hóa và nhận diện 3 tag chính: Tiêu dùng, Tiết kiệm, Phát sinh
+function normalizeTag(str) {
+  if (!str) return null;
+  const clean = str.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // bỏ dấu tiếng Việt để so sánh
+  
+  if (clean === 'tieu dung' || clean === 'td' || clean === 'tieu' || clean === 'chi tieu' || clean === 'spending') {
+    return 'Tiêu dùng';
+  }
+  if (clean === 'tiet kiem' || clean === 'tk' || clean === 'tiet' || clean === 'saving') {
+    return 'Tiết kiệm';
+  }
+  if (clean === 'phat sinh' || clean === 'ps' || clean === 'phat' || clean === 'extra') {
+    return 'Phát sinh';
+  }
+  return null;
+}
+
+// Phân tích thời gian tương tự như cú pháp deadline (VD: 15/30, 15/30/+1, 15/30/02/10)
+function parseDateTime(timeStr) {
+  if (!timeStr || !timeStr.includes('/')) return null;
+
+  const timeParts = timeStr.trim().split('/');
+  if (timeParts.length < 2) return null;
+
+  const hour = parseInt(timeParts[0]);
+  const minute = parseInt(timeParts[1]);
+  if (isNaN(hour) || isNaN(minute)) return null;
+
+  let targetDate = dayjs().tz("Asia/Ho_Chi_Minh");
+
+  if (timeParts.length === 2) {
+    // giờ/phút hôm nay
+    targetDate = targetDate.hour(hour).minute(minute).second(0).millisecond(0);
+  } else if (timeParts.length === 3 && timeParts[2].startsWith('+')) {
+    // giờ/phút/+N ngày
+    const addDays = parseInt(timeParts[2].replace('+', ''));
+    targetDate = targetDate.add(addDays, 'day').hour(hour).minute(minute).second(0).millisecond(0);
+  } else if (timeParts.length >= 4) {
+    // giờ/phút/ngày/tháng hoặc giờ/phút/ngày/tháng/năm
+    const day = parseInt(timeParts[2]);
+    const month = parseInt(timeParts[3]) - 1;
+    const year = timeParts.length === 5 ? parseInt(timeParts[4]) : targetDate.year();
+    targetDate = targetDate.year(year).month(month).date(day).hour(hour).minute(minute).second(0).millisecond(0);
+  }
+
+  return targetDate.isValid() ? targetDate.valueOf() : null;
+}
+
 /**
- * Phân tích tin nhắn Quản lý tiền bạc
- * Cú pháp hỗ trợ các dạng linh hoạt dựa trên cấu trúc cũ (ngăn cách dấu phẩy, thêm trường + hoặc -):
- * - Dạng 1: `+, Số tiền, Nội dung, [Tên quỹ]` hoặc `-, Số tiền, Nội dung, [Tên quỹ]`
- *   VD: `-, 45k, Cơm trưa, Ăn uống`
- * - Dạng 2: `Nội dung, +, Số tiền, [Tên quỹ]` hoặc `Nội dung, -, Số tiền, [Tên quỹ]`
- *   VD: `Cơm trưa, -, 45k, Ăn uống`
- * - Dạng 3: `Nội dung, -Số tiền, [Tên quỹ]` hoặc `Nội dung, +Số tiền, [Tên quỹ]`
- *   VD: `Cơm trưa, -45k, Ăn uống`
- * - Dạng 4: `-, 45k, Cơm trưa` (Quỹ mặc định là 'Quỹ chung')
+ * Phân tích tin nhắn Quản lý tiền bạc theo đúng yêu cầu:
+ * Cú pháp: +/-số tiền, tag, nội dung(có hay không cũng được), thời gian(tương tự deadline)
+ * Quy tắc:
+ * 1. Chỉ có đúng 3 quỹ: "Tiêu dùng", "Tiết kiệm", "Phát sinh".
+ * 2. Khi không nhập tag nào trong 3 tag:
+ *    - Nếu là '+' -> tự động cộng vào quỹ Tiết kiệm
+ *    - Nếu là '-' -> tự động trừ vào quỹ Tiêu dùng
+ * 3. Nội dung và Thời gian là tùy chọn (nếu không nhập thời gian thì lấy thời điểm hiện tại).
  */
 function parseFinanceMessage(text) {
   if (!text || typeof text !== 'string') return null;
 
   const rawParts = text.split(',').map(p => p.trim()).filter(Boolean);
-  if (rawParts.length < 2) {
-    // Trường hợp gõ không dấu phẩy như "+ 50k Cơm trưa" hoặc "- 50k Cơm trưa"
-    const spaceMatch = text.trim().match(/^([+-])\s*(\d+[a-zA-Z\d\.]*)\s*(.*)$/);
-    if (spaceMatch) {
-      const type = spaceMatch[1] === '+' ? 'income' : 'expense';
-      const amount = parseAmount(spaceMatch[2]);
-      const rest = spaceMatch[3].trim();
-      const restParts = rest.split(',').map(p => p.trim()).filter(Boolean);
-      const description = restParts[0] || (type === 'income' ? 'Thu nhập' : 'Chi tiêu');
-      const fundName = restParts[1] || 'Quỹ chung';
-      if (amount > 0) {
-        return { isFinance: true, type, amount, description, fundName };
-      }
-    }
-    return null;
-  }
+  if (rawParts.length === 0) return null;
 
-  let type = null; // 'income' | 'expense'
+  let type = null; // 'income' (+) hoặc 'expense' (-)
   let amount = 0;
   let remainingParts = [];
 
-  // 1. Kiểm tra xem có phần nào là dấu '+' hoặc '-' riêng biệt không
-  let signIndex = rawParts.findIndex(p => p === '+' || p === '-');
-  if (signIndex !== -1) {
-    type = rawParts[signIndex] === '+' ? 'income' : 'expense';
-    // Loại bỏ phần dấu
-    remainingParts = rawParts.filter((_, idx) => idx !== signIndex);
-  } else {
-    // 2. Kiểm tra xem có phần nào bắt đầu bằng '+' hoặc '-' kết hợp số tiền không (vd: -45k, +5tr)
-    let signedAmountIndex = rawParts.findIndex(p => {
+  // 1. Kiểm tra phần đầu tiên hoặc bất kỳ phần nào có dấu +/- kèm số tiền
+  // Dạng 1: Part 0 là "-50k" hoặc "+100k" hoặc "+ 500k"
+  const firstMatch = rawParts[0].match(/^([+-])\s*(\d+[a-zA-Z\d\.]*)$/);
+  if (firstMatch) {
+    type = firstMatch[1] === '+' ? 'income' : 'expense';
+    amount = parseAmount(firstMatch[2]);
+    remainingParts = rawParts.slice(1);
+  } 
+  // Dạng 2: Part 0 là riêng dấu "+" hoặc "-", Part 1 là số tiền "50k" (VD: `-, 50k, tiêu dùng`)
+  else if ((rawParts[0] === '+' || rawParts[0] === '-') && rawParts[1] && isAmountString(rawParts[1])) {
+    type = rawParts[0] === '+' ? 'income' : 'expense';
+    amount = parseAmount(rawParts[1]);
+    remainingParts = rawParts.slice(2);
+  }
+  // Dạng 3: Tìm trong các parts nếu có part nào bắt đầu bằng + hoặc - kết hợp số
+  else {
+    const signedIndex = rawParts.findIndex(p => {
       const s = p.trim();
-      return (s.startsWith('+') || s.startsWith('-')) && isAmountString(s) && !s.includes('/');
+      return (s.startsWith('+') || s.startsWith('-')) && isAmountString(s);
     });
 
-    if (signedAmountIndex !== -1) {
-      const signedStr = rawParts[signedAmountIndex].trim();
+    if (signedIndex !== -1) {
+      const signedStr = rawParts[signedIndex].trim();
       type = signedStr.startsWith('+') ? 'income' : 'expense';
       amount = parseAmount(signedStr);
-      remainingParts = rawParts.filter((_, idx) => idx !== signedAmountIndex);
-    } else {
-      // 3. Kiểm tra trường đầu tiên bắt đầu bằng '+' hoặc '-' (vd: "+ Lương", "- Cơm trưa")
-      const firstPart = rawParts[0];
-      if (firstPart.startsWith('+') || firstPart.startsWith('-')) {
-        type = firstPart.startsWith('+') ? 'income' : 'expense';
-        const cleanedFirst = firstPart.substring(1).trim();
-        remainingParts = [cleanedFirst, ...rawParts.slice(1)].filter(Boolean);
-      }
+      remainingParts = rawParts.filter((_, idx) => idx !== signedIndex);
     }
   }
 
-  // Nếu không phát hiện dấu + hay - nào thì không phải tin nhắn tài chính
-  if (!type) {
+  // Nếu không phát hiện dấu + hay - hợp lệ kèm số tiền thì đây không phải tin nhắn tiền bạc
+  if (!type || amount <= 0) {
     return null;
   }
 
-  // 4. Nếu chưa trích xuất được số tiền, tìm trong remainingParts
-  if (amount <= 0) {
-    const amtIndex = remainingParts.findIndex(p => isAmountString(p));
-    if (amtIndex !== -1) {
-      amount = parseAmount(remainingParts[amtIndex]);
-      remainingParts = remainingParts.filter((_, idx) => idx !== amtIndex);
+  // 2. Phân tích các phần còn lại để trích xuất Tag, Thời gian, và Nội dung
+  let matchedFund = null;
+  let transactionTime = Date.now();
+  let descParts = [];
+
+  for (const part of remainingParts) {
+    // Ktra có phải là 1 trong 3 Tag không
+    const tag = normalizeTag(part);
+    if (tag && !matchedFund) {
+      matchedFund = tag;
+      continue;
+    }
+
+    // Ktra có phải là chuỗi thời gian không (VD: 12/00, 15/30/02/10)
+    const timeVal = parseDateTime(part);
+    if (timeVal !== null) {
+      transactionTime = timeVal;
+      continue;
+    }
+
+    // Nếu không phải Tag và không phải Thời gian -> Nội dung
+    descParts.push(part);
+  }
+
+  // 3. Quy tắc mặc định quỹ khi không có tag:
+  // "khi tôi nhập mà không có tên tag nào trong 3 tag thì nếu là + thì sẽ cộng tiền vào tiết kiệm, nếu là - thì sẽ - vào quỹ tiêu dùng"
+  let fundName = matchedFund;
+  if (!fundName) {
+    fundName = (type === 'income') ? 'Tiết kiệm' : 'Tiêu dùng';
+  }
+
+  // 4. Nội dung (Description)
+  let description = descParts.join(', ').trim();
+  if (!description) {
+    if (matchedFund) {
+      description = (type === 'income' ? 'Thu nhập ' : 'Chi tiêu ') + matchedFund;
+    } else {
+      description = (type === 'income' ? 'Cộng tiền tiết kiệm' : 'Chi tiêu tiêu dùng');
     }
   }
-
-  if (amount <= 0) {
-    throw new Error('Không tìm thấy số tiền hợp lệ. VD: `-, 45k, Cơm trưa, Ăn uống` hoặc `+, 5tr, Lương, Tiết kiệm`');
-  }
-
-  // 5. Trích xuất Nội dung (description) và Tên quỹ (fundName)
-  const description = remainingParts[0] || (type === 'income' ? 'Thu nhập' : 'Chi tiêu');
-  const fundName = remainingParts[1] || 'Quỹ chung';
 
   return {
     isFinance: true,
     type,
     amount,
     description,
-    fundName
+    fundName,
+    transactionTime
   };
 }
 
@@ -223,6 +279,8 @@ module.exports = {
   parseMessage,
   parseFinanceMessage,
   parseAmount,
+  parseDateTime,
+  normalizeTag,
   formatTime,
   formatMoney
 };

@@ -15,7 +15,7 @@ function showAppView() {
   switchSection(currentSection);
 }
 
-// Chuyển đổi giữa [DEADLINE] và [QUẢN LÝ TIỀN]
+// Chuyển đổi giữa [DEADLINE] và [TÀI CHÍNH 3 QUỸ]
 function switchSection(section) {
   currentSection = section;
   localStorage.setItem('activeSection', section);
@@ -158,7 +158,7 @@ async function deleteDeadline(id) {
   }
 }
 
-// ================= PHẦN QUẢN LÝ TIỀN BẠC (FINANCE) =================
+// ================= PHẦN QUẢN LÝ TÀI CHÍNH 3 QUỸ =================
 
 // Format số tiền VNĐ
 function formatMoney(amount) {
@@ -176,7 +176,6 @@ async function loadFinanceOverview() {
 
     // 1. Cập nhật Tổng tiền tất cả các quỹ
     document.getElementById('total-balance-display').textContent = formatMoney(data.totalBalance);
-    document.getElementById('funds-count-display').textContent = `${data.funds.length} quỹ đang hoạt động`;
 
     // 2. Cập nhật Thống kê Tuần
     document.getElementById('week-label-display').textContent = data.weekInfo.label;
@@ -187,35 +186,28 @@ async function loadFinanceOverview() {
     const progressBar = document.getElementById('budget-progress-bar');
     const progressText = document.getElementById('budget-progress-text');
 
-    if (data.weeklyBudget > 0) {
-      remainingEl.textContent = formatMoney(data.remainingWeek);
-      if (data.remainingWeek < 0) {
-        remainingEl.style.color = 'var(--danger)';
-      } else {
-        remainingEl.style.color = 'var(--accent)';
-      }
-
-      const percentage = Math.min(100, Math.round((data.spentThisWeek / data.weeklyBudget) * 100));
-      progressBar.style.width = `${percentage}%`;
-      progressBar.className = 'progress-bar-fill';
-
-      if (percentage >= 100 || data.remainingWeek < 0) {
-        progressBar.classList.add('danger');
-        progressText.innerHTML = `⚠️ <strong style="color: var(--danger)">ĐÃ VƯỢT HẠN MỨC TUẦN</strong> (${percentage}%)`;
-      } else if (percentage >= 75) {
-        progressBar.classList.add('warning');
-        progressText.innerHTML = `<span style="color: var(--warning)">Đã dùng ${percentage}% hạn mức tuần</span>`;
-      } else {
-        progressText.textContent = `Đã dùng ${percentage}% hạn mức tuần`;
-      }
+    remainingEl.textContent = formatMoney(data.remainingWeek);
+    if (data.remainingWeek < 0) {
+      remainingEl.style.color = 'var(--danger)';
     } else {
-      remainingEl.textContent = '--';
-      remainingEl.style.color = 'var(--text-muted)';
-      progressBar.style.width = '0%';
-      progressText.textContent = 'Chưa đặt hạn mức tuần. Bấm "✏️ Đặt hạn mức" để quản lý.';
+      remainingEl.style.color = 'var(--accent)';
     }
 
-    // 3. Render danh sách các Quỹ
+    const percentage = Math.min(100, Math.round((data.spentThisWeek / data.weeklyBudget) * 100));
+    progressBar.style.width = `${percentage}%`;
+    progressBar.className = 'progress-bar-fill';
+
+    if (percentage >= 100 || data.remainingWeek < 0) {
+      progressBar.classList.add('danger');
+      progressText.innerHTML = `⚠️ <strong style="color: var(--danger)">ĐÃ VƯỢT HẠN MỨC TUẦN NÀY</strong> (${percentage}%)`;
+    } else if (percentage >= 75) {
+      progressBar.classList.add('warning');
+      progressText.innerHTML = `<span style="color: var(--warning)">Đã chi ${percentage}% định mức tuần (${formatMoney(data.spentThisWeek)} / 600k)</span>`;
+    } else {
+      progressText.textContent = `Đã chi ${percentage}% định mức tuần (${formatMoney(data.spentThisWeek)} / 600k)`;
+    }
+
+    // 3. Render danh sách 3 Quỹ chuẩn
     renderFunds(data.funds);
 
   } catch (err) {
@@ -223,119 +215,49 @@ async function loadFinanceOverview() {
   }
 }
 
-// Render thẻ các quỹ
+// Render thẻ 3 Quỹ cố định
 function renderFunds(funds) {
   const fundsList = document.getElementById('funds-list');
-  const fundSelect = document.getElementById('trans-fund-select');
   fundsList.innerHTML = '';
-  fundSelect.innerHTML = '';
 
-  if (!funds || funds.length === 0) {
-    fundsList.innerHTML = `<p style="grid-column: 1/-1; color: var(--text-muted); text-align: center;">Chưa có quỹ nào.</p>`;
-    return;
-  }
+  const fundMeta = {
+    'Tiêu dùng': {
+      icon: '🛒',
+      allowance: '500,000 đ/tuần',
+      desc: 'Hết tuần tự reset, tiền còn dư cộng vào Tiết kiệm'
+    },
+    'Phát sinh': {
+      icon: '⚡',
+      allowance: '100,000 đ/tuần',
+      desc: 'Tập gym, trả nợ... hết tuần tự chuyển dư sang Tiết kiệm'
+    },
+    'Tiết kiệm': {
+      icon: '🐷',
+      allowance: 'Tích lũy liên tục',
+      desc: 'Nhận tiền nạp trực tiếp & tiền dư từ 2 quỹ mỗi cuối tuần'
+    }
+  };
 
   funds.forEach(fund => {
-    // Thêm option vào dropdown chọn quỹ khi ghi nhận giao dịch
-    const opt = document.createElement('option');
-    opt.value = fund.name;
-    opt.textContent = `${fund.name} (${formatMoney(fund.balance)})`;
-    fundSelect.appendChild(opt);
-
-    // Thẻ card hiển thị quỹ
+    const meta = fundMeta[fund.name] || { icon: '💰', allowance: '', desc: '' };
     const card = document.createElement('div');
     card.className = 'fund-card';
     const isNegative = Number(fund.balance) < 0;
 
     card.innerHTML = `
       <div class="fund-name">
-        <span>${escapeHtml(fund.name)}</span>
-        ${funds.length > 1 ? `<button class="btn-fund-del" onclick="handleDeleteFund(${fund.id}, '${escapeHtml(fund.name)}')" title="Xóa quỹ">✖</button>` : ''}
+        <span>${meta.icon} ${escapeHtml(fund.name)}</span>
+        <span class="fund-tag-pill">${meta.allowance}</span>
       </div>
       <div class="fund-balance ${isNegative ? 'negative' : ''}">
         ${formatMoney(fund.balance)}
       </div>
+      <div class="fund-note">
+        ${meta.desc}
+      </div>
     `;
     fundsList.appendChild(card);
   });
-}
-
-// Mở popup đặt hạn mức tuần
-async function openBudgetModal() {
-  const currentBudget = document.getElementById('weekly-budget-display').textContent;
-  const input = prompt('Nhập hạn mức chi tiêu cho 1 tuần (VD: 1500000 hoặc 1.5tr):', currentBudget.replace(/[^\d]/g, ''));
-  if (input === null || input.trim() === '') return;
-
-  try {
-    const res = await fetch('/api/finance/weekly-budget', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chatId: myChatId, amount: input.trim() })
-    });
-    const result = await res.json();
-    if (result.success) {
-      loadFinanceOverview();
-    } else {
-      alert('Lỗi: ' + (result.error || 'Không thể cập nhật hạn mức'));
-    }
-  } catch (err) {
-    alert('Lỗi kết nối khi đặt hạn mức tuần');
-  }
-}
-
-// Ẩn/hiện form tạo quỹ
-function toggleFundForm() {
-  const form = document.getElementById('new-fund-form');
-  const isHidden = form.style.display === 'none';
-  form.style.display = isHidden ? 'flex' : 'none';
-  if (isHidden) {
-    document.getElementById('fund-name-input').focus();
-  }
-}
-
-// Tạo quỹ mới
-async function handleCreateFund() {
-  const name = document.getElementById('fund-name-input').value.trim();
-  const balance = document.getElementById('fund-init-balance-input').value.trim();
-
-  if (!name) {
-    alert('Vui lòng nhập tên quỹ!');
-    return;
-  }
-
-  try {
-    const res = await fetch('/api/finance/funds', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chatId: myChatId, name, initialBalance: balance })
-    });
-    const result = await res.json();
-    if (result.success) {
-      document.getElementById('fund-name-input').value = '';
-      document.getElementById('fund-init-balance-input').value = '';
-      toggleFundForm();
-      loadFinanceOverview();
-    } else {
-      alert('Lỗi: ' + (result.error || 'Không thể tạo quỹ'));
-    }
-  } catch (err) {
-    alert('Lỗi khi tạo quỹ');
-  }
-}
-
-// Xóa quỹ
-async function handleDeleteFund(fundId, fundName) {
-  if (confirm(`Bạn có chắc muốn xóa quỹ "${fundName}"? (Các giao dịch thuộc quỹ này vẫn được bảo lưu)`)) {
-    try {
-      const res = await fetch(`/api/finance/funds/${fundId}?chatId=${myChatId}`, { method: 'DELETE' });
-      const result = await res.json();
-      if (result.success) {
-        loadFinanceOverview();
-      }
-    } catch (err) {
-      alert('Lỗi khi xóa quỹ');
-    }
-  }
 }
 
 // Chọn loại giao dịch (Chi tiêu hay Thu nhập)
@@ -343,13 +265,20 @@ function selectTransType(type) {
   currentTransType = type;
   const expenseBtn = document.getElementById('type-expense-btn');
   const incomeBtn = document.getElementById('type-income-btn');
+  const fundSelect = document.getElementById('trans-fund-select');
 
   if (type === 'expense') {
     expenseBtn.classList.add('active');
     incomeBtn.classList.remove('active');
+    // Mặc định cho chi tiêu là Tiêu dùng
+    if (fundSelect.value === 'Tiết kiệm') {
+      fundSelect.value = 'Tiêu dùng';
+    }
   } else {
     expenseBtn.classList.remove('active');
     incomeBtn.classList.add('active');
+    // Mặc định cho thu nhập là Tiết kiệm
+    fundSelect.value = 'Tiết kiệm';
   }
 }
 
@@ -358,9 +287,10 @@ async function handleAddTransaction() {
   const amountStr = document.getElementById('trans-amount-input').value.trim();
   const fundName = document.getElementById('trans-fund-select').value;
   const description = document.getElementById('trans-desc-input').value.trim();
+  const timeStr = document.getElementById('trans-time-input').value.trim();
 
   if (!amountStr) {
-    alert('Vui lòng nhập số tiền!');
+    alert('Vui lòng nhập số tiền (VD: 50k hoặc 50000)!');
     return;
   }
 
@@ -373,7 +303,8 @@ async function handleAddTransaction() {
         type: currentTransType,
         amount: amountStr,
         fundName,
-        description: description || (currentTransType === 'income' ? 'Thu nhập' : 'Chi tiêu')
+        description: description || (currentTransType === 'income' ? 'Thu nhập ' + fundName : 'Chi tiêu ' + fundName),
+        timeStr: timeStr || undefined
       })
     });
 
@@ -381,6 +312,7 @@ async function handleAddTransaction() {
     if (result.success) {
       document.getElementById('trans-amount-input').value = '';
       document.getElementById('trans-desc-input').value = '';
+      document.getElementById('trans-time-input').value = '';
       loadFinanceOverview();
       loadTransactions(currentFinanceFilter);
     } else {
@@ -428,9 +360,13 @@ async function loadTransactions(filter = currentFinanceFilter) {
       const itemEl = document.createElement('div');
       itemEl.className = `trans-item ${item.type}`;
 
+      const isTransfer = item.description && item.description.includes('Dư tuần');
+
       itemEl.innerHTML = `
         <div class="trans-left">
-          <div class="trans-desc">${escapeHtml(item.description)}</div>
+          <div class="trans-desc">
+            ${isTransfer ? '🔄 ' : ''}${escapeHtml(item.description)}
+          </div>
           <div class="trans-meta">
             <span>🏦 ${escapeHtml(item.fund_name)}</span>
             <span>🕒 ${timeStr}</span>

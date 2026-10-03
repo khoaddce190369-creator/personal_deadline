@@ -27,11 +27,14 @@ bot.on('message', async (msg) => {
           '📌 **1. QUẢN LÝ DEADLINE:**\n' +
           '`Nội dung, giờ/phút/ngày/tháng, trước bao lâu`\n' +
           'VD: `Họp team, 15/30, 30p`\n\n' +
-          '💰 **2. QUẢN LÝ TIỀN BẠC (THU/CHI/QUỸ):**\n' +
-          '• Chi tiêu (-): `-, 45k, Cơm trưa, Ăn uống`\n' +
-          '• Thu nhập (+): `+, 5tr, Lương tháng, Tiết kiệm`\n\n' +
-          '🌐 Để lấy mật khẩu vào Web: gõ `/web`\n' +
-          '📊 Xem ví & quỹ: gõ `/tien`',
+          '💰 **2. QUẢN LÝ 3 QUỸ TIỀN BẠC:**\n' +
+          '• `Tiêu dùng` (500k/tuần, dư chuyển Tiết kiệm)\n' +
+          '• `Phát sinh` (100k/tuần, dư chuyển Tiết kiệm)\n' +
+          '• `Tiết kiệm` (Tích lũy, nhận tiền nạp & tiền dư)\n\n' +
+          'Cú pháp: `+/-số tiền, tag, nội dung, thời gian`\n' +
+          'VD: `-50k, tiêu dùng, ăn trưa, 12/00`\n' +
+          '*(Nếu không ghi tag: "-" tự vào Tiêu dùng, "+" tự vào Tiết kiệm)*\n\n' +
+          '🌐 Xem web: gõ `/web` | 📊 Tài chính: gõ `/finance` | ❓ Hướng dẫn: nhắn `?`',
           { parse_mode: 'Markdown' }
         );
       } else {
@@ -39,8 +42,11 @@ bot.on('message', async (msg) => {
       }
     }
 
+    const trimmedText = text.trim();
+    const lowerText = trimmedText.toLowerCase();
+
     // 2. Xử lý lệnh lấy pass Web
-    if (text === '/web') {
+    if (lowerText === '/web') {
       const pin = Math.floor(100000 + Math.random() * 900000).toString(); // Mã 6 số ngẫu nhiên
       await db.execute({ sql: `UPDATE allowed_users SET web_pin = ? WHERE chat_id = ?`, args: [pin, chatId] });
       return bot.sendMessage(
@@ -53,83 +59,72 @@ bot.on('message', async (msg) => {
       );
     }
 
-    // Lệnh xem trợ giúp / start
-    if (text === '/start' || text === '/help') {
+    // Bảng hướng dẫn giao tiếp với bot khi nhắn "?" hoặc "/help", "/start"
+    if (trimmedText === '?' || lowerText === '/start' || lowerText === '/help') {
       return bot.sendMessage(
         chatId,
-        `👋 **CHÀO MỪNG BẠN ĐẾN VỚI HỆ THỐNG TRỢ LÝ CÁ NHÂN!**\n\n` +
-        `⏰ **QUẢN LÝ DEADLINE:**\n` +
-        `• Cú pháp: \`Nội dung, giờ/phút/ngày/tháng, trước bao lâu\`\n` +
-        `• Ví dụ: \`Họp team, 15/30/26/09, 1h 30p\`\n\n` +
-        `💰 **QUẢN LÝ TIỀN BẠC (THU / CHI / QUỸ):**\n` +
-        `• Chi tiêu (-): \`-, 45k, Cơm trưa, Ăn uống\`\n` +
-        `• Thu nhập (+): \`+, 2tr, Thưởng dự án, Tiết kiệm\`\n` +
-        `*(Hỗ trợ viết tắt: 50k, 1.5tr, 2m... Nếu không ghi tên quỹ, bot tự vào "Quỹ chung")*\n\n` +
-        `📊 **CÁC LỆNH NHANH:**\n` +
-        `• \`/tien\` hoặc \`/vi\`: Xem tổng tài sản, chi tiêu tuần & số dư các quỹ\n` +
-        `• \`/setbudget <tiền>\`: Đặt hạn mức chi tiêu tuần (VD: \`/setbudget 1.5tr\`)\n` +
-        `• \`/web\`: Lấy mã PIN đăng nhập Web`,
+        `📖 **BẢNG HƯỚNG DẪN GIAO TIẾP VỚI BOT**\n\n` +
+        `💰 **1. QUẢN LÝ TÀI CHÍNH (3 QUỸ CỐ ĐỊNH)**\n` +
+        `• **Cú pháp:** \`+/-số tiền, tag, nội dung, thời gian\`\n` +
+        `• **3 Quỹ chuẩn:**\n` +
+        `  - 🛒 *Tiêu dùng*: 500k/tuần (dư cuối tuần tự chuyển sang Tiết kiệm)\n` +
+        `  - ⚡ *Phát sinh*: 100k/tuần (gym, nợ... dư cuối tuần tự sang Tiết kiệm)\n` +
+        `  - 🐷 *Tiết kiệm*: Tích lũy liên tục (nhận tiền nạp & tiền dư 2 quỹ)\n` +
+        `• **Quy tắc khi không ghi tag:**\n` +
+        `  - Dấu **\`-\`** ➔ Tự động trừ vào **Quỹ Tiêu dùng**\n` +
+        `  - Dấu **\`+\`** ➔ Tự động cộng vào **Quỹ Tiết kiệm**\n` +
+        `• **Ví dụ mẫu:**\n` +
+        `  - \`-50k, tiêu dùng, ăn trưa, 12/00\`\n` +
+        `  - \`-45k, cơm trưa\` *(tự trừ Tiêu dùng)*\n` +
+        `  - \`-30k, phát sinh, gửi xe\`\n` +
+        `  - \`+100k, tiết kiệm, tiền mừng\`\n` +
+        `  - \`+200k, làm thêm\` *(tự cộng Tiết kiệm)*\n` +
+        `  - \`-25k\` hoặc \`+500k\` *(nhập siêu nhanh)*\n\n` +
+        `⏰ **2. QUẢN LÝ DEADLINE (NHẮC HẸN & BÁO THỨC)**\n` +
+        `• **Cú pháp:** \`Nội dung, giờ/phút/ngày/tháng, trước bao lâu\`\n` +
+        `• **Ví dụ mẫu:**\n` +
+        `  - \`Họp team, 15/30, 30p\`\n` +
+        `  - \`Nộp bài tập, 23/59/05/10, 1h\`\n` +
+        `  - \`Đi khám bệnh, 08/00/+1, 15p\`\n\n` +
+        `📋 **3. CÁC LỆNH NHANH:**\n` +
+        `• \`?\` : Xem bảng hướng dẫn giao tiếp này\n` +
+        `• \`/finance\` (hoặc \`/tien\`, \`/vi\`) : Xem tình hình tài chính hiện tại\n` +
+        `• \`/web\` : Lấy mã PIN đăng nhập Web Dashboard`,
         { parse_mode: 'Markdown' }
       );
     }
 
-    // Lệnh xem tổng quan tiền bạc
-    if (text === '/tien' || text === '/vi' || text === '/funds' || text === '/wallet') {
+    // Lệnh xem tình hình tài chính hiện tại (/finance)
+    if (
+      lowerText === '/finance' ||
+      lowerText === '/tien' ||
+      lowerText === '/vi' ||
+      lowerText === '/funds' ||
+      lowerText === '/wallet'
+    ) {
       const overview = await financeService.getOverview(chatId);
-      let reply = `💰 **TỔNG QUAN TÀI CHÍNH CỦA BẠN**\n\n`;
-      reply += `💳 **Tổng tài sản:** \`${formatMoney(overview.totalBalance)}\`\n\n`;
+      let reply = `💰 **TÌNH HÌNH TÀI CHÍNH HIỆN TẠI**\n\n`;
+      reply += `💳 **Tổng tài sản (3 quỹ):** \`${formatMoney(overview.totalBalance)}\`\n\n`;
 
-      reply += `📅 **Hạn mức chi tiêu tuần (${overview.weekInfo.label}):**\n`;
-      if (overview.weeklyBudget > 0) {
-        const percent = Math.min(100, Math.round((overview.spentThisWeek / overview.weeklyBudget) * 100));
-        reply += `• Hạn mức tuần: \`${formatMoney(overview.weeklyBudget)}\`\n`;
-        reply += `• Đã chi: \`${formatMoney(overview.spentThisWeek)}\` (${percent}%)\n`;
-        if (overview.remainingWeek >= 0) {
-          reply += `• Còn lại: \`${formatMoney(overview.remainingWeek)}\` 🟢\n\n`;
-        } else {
-          reply += `• Vượt quá: \`${formatMoney(Math.abs(overview.remainingWeek))}\` 🔴 (Cảnh báo vượt hạn mức!)\n\n`;
-        }
+      reply += `📊 **Tiến độ tuần (${overview.weekInfo.label}):**\n`;
+      reply += `• Hạn mức cấp tuần: \`${formatMoney(overview.weeklyBudget)}\` (500k + 100k)\n`;
+      reply += `• Đã chi tiêu tuần này: \`${formatMoney(overview.spentThisWeek)}\`\n`;
+      if (overview.remainingWeek >= 0) {
+        reply += `• Còn lại tuần này: \`${formatMoney(overview.remainingWeek)}\` 🟢\n`;
       } else {
-        reply += `• Đã chi tuần này: \`${formatMoney(overview.spentThisWeek)}\`\n`;
-        reply += `• *(Chưa đặt hạn mức tuần. Gõ \`/setbudget <tiền>\` để đặt)*\n\n`;
+        reply += `• Đã thâm hụt: \`${formatMoney(Math.abs(overview.remainingWeek))}\` 🔴 (Vượt hạn mức!)\n`;
       }
+      reply += `*(Hết tuần, toàn bộ số dư còn lại sẽ tự động cộng dồn sang Quỹ Tiết kiệm)*\n\n`;
 
-      reply += `🏦 **Số dư các Quỹ:**\n`;
-      if (overview.funds.length === 0) {
-        reply += `• Chưa có quỹ nào. Giao dịch mới sẽ tự tạo quỹ.\n`;
-      } else {
-        overview.funds.forEach(f => {
-          reply += `• ${f.name}: \`${formatMoney(f.balance)}\`\n`;
-        });
-      }
+      reply += `🏦 **Chi tiết 3 Quỹ:**\n`;
+      reply += `🛒 **Tiêu dùng:** \`${formatMoney(overview.spendingBalance)}\` / 500,000 đ\n`;
+      reply += `⚡ **Phát sinh:** \`${formatMoney(overview.extraBalance)}\` / 100,000 đ\n`;
+      reply += `🐷 **Tiết kiệm:** \`${formatMoney(overview.savingsBalance)}\` (Tích lũy)\n\n`;
 
-      reply += `\n💡 Gõ \`-, 45k, Cơm trưa, Ăn uống\` để ghi chép chi tiêu.`;
+      reply += `💡 Gõ \`-50k, ăn trưa\` để chi tiêu hoặc \`+100k\` để thêm tiết kiệm.\n`;
+      reply += `💡 Nhắn \`?\` để mở lại bảng hướng dẫn.`;
 
       return bot.sendMessage(chatId, reply, { parse_mode: 'Markdown' });
-    }
-
-    // Lệnh đặt hạn mức chi tiêu tuần
-    if (text.startsWith('/setbudget')) {
-      const rawBudget = text.replace('/setbudget', '').trim();
-      const budgetAmount = parseAmount(rawBudget);
-
-      if (budgetAmount <= 0) {
-        return bot.sendMessage(chatId, '❌ Vui lòng nhập số tiền hợp lệ. VD: `/setbudget 1500000` hoặc `/setbudget 1.5tr`', { parse_mode: 'Markdown' });
-      }
-
-      const res = await financeService.setWeeklyBudget(chatId, budgetAmount);
-      const spent = await financeService.getWeeklySpending(chatId);
-      const remaining = budgetAmount - spent;
-
-      return bot.sendMessage(
-        chatId,
-        `✅ **ĐÃ CẬP NHẬT HẠN MỨC TUẦN THÀNH CÔNG!**\n\n` +
-        `🎯 Hạn mức: \`${formatMoney(budgetAmount)}\`\n` +
-        `📉 Đã tiêu tuần này: \`${formatMoney(spent)}\`\n` +
-        `💵 Số tiền còn lại: \`${formatMoney(remaining)}\`\n\n` +
-        `Bot sẽ giúp bạn theo dõi chi tiêu để không vượt quá hạn mức này!`,
-        { parse_mode: 'Markdown' }
-      );
     }
 
     const msgId = msg.message_id;
@@ -140,11 +135,14 @@ bot.on('message', async (msg) => {
       pendingFinances.set(chatId, financeData);
 
       const typeLabel = financeData.type === 'income' ? '🟢 Thu nhập (+)' : '🔴 Chi tiêu (-)';
+      const timeStr = formatTime(financeData.transactionTime);
+
       const reply = `💰 **XÁC NHẬN GIAO DỊCH TIỀN BẠC**\n\n`
                   + `🏷️ Phân loại: ${typeLabel}\n`
                   + `💵 Số tiền: *${formatMoney(financeData.amount)}*\n`
+                  + `🏦 Quỹ: *${financeData.fundName}*\n`
                   + `📝 Nội dung: *${financeData.description}*\n`
-                  + `🏦 Quỹ: *${financeData.fundName}*`;
+                  + `🕒 Thời gian: *${timeStr}*`;
 
       const options = {
         parse_mode: 'Markdown',
@@ -215,17 +213,11 @@ bot.on('callback_query', async (query) => {
       let confirmMsg = `✅ **ĐÃ LƯU GIAO DỊCH THÀNH CÔNG!**\n\n`
                      + `🏷️ Loại: ${typeLabel}\n`
                      + `💵 Số tiền: *${formatMoney(result.amount)}*\n`
+                     + `🏦 Quỹ: *${result.fund_name}* (Số dư mới: \`${formatMoney(result.fund_balance)}\`)\n`
                      + `📝 Nội dung: *${result.description}*\n`
-                     + `🏦 Quỹ: *${result.fund_name}* (Số dư: \`${formatMoney(result.fund_balance)}\`)\n`;
-
-      if (result.type === 'expense' && result.weekly_budget > 0) {
-        confirmMsg += `\n📊 **Chi tiêu tuần:** \`${formatMoney(result.spent_this_week)}\` / \`${formatMoney(result.weekly_budget)}\``;
-        if (result.remaining_week >= 0) {
-          confirmMsg += ` (Còn lại: \`${formatMoney(result.remaining_week)}\`)`;
-        } else {
-          confirmMsg += ` ⚠️ *(ĐÃ VƯỢT HẠN MỨC ${formatMoney(Math.abs(result.remaining_week))}!)*`;
-        }
-      }
+                     + `🕒 Thời gian: *${formatTime(result.created_at)}*\n\n`
+                     + `💳 **Tổng tài sản:** \`${formatMoney(result.total_balance)}\`\n`
+                     + `📉 **Còn lại tuần này:** \`${formatMoney(result.remaining_week)}\``;
 
       bot.editMessageText(confirmMsg, { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown' });
     }
