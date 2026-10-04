@@ -11,7 +11,10 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: '1h',
+  etag: true
+}));
 
 // Đăng nhập Web bằng chat_id và web_pin
 app.post('/api/login', async (req, res) => {
@@ -233,17 +236,19 @@ app.post('/api/finance/transactions', async (req, res) => {
       transactionTime: finalTime
     });
 
-    // Gửi tin nhắn Telegram xác nhận và báo cáo tình hình quỹ & tổng số dư
-    try {
-      const telegramService = require('./services/telegramService');
-      const overview = await financeService.getOverview(chatId);
-      const teleMsg = telegramService.buildTransactionReport(result, overview, 'XÁC NHẬN GIAO DỊCH TIỀN BẠC (TỪ WEB)');
-      telegramService.sendMessage(chatId, teleMsg, { parse_mode: 'Markdown' });
-    } catch (e) {
-      console.warn('Không thể gửi tin nhắn Telegram thông báo:', e.message);
-    }
-
+    // Phản hồi ngay lập tức cho client Web để giao diện mượt mà không bị delay
     res.json({ success: true, ...result });
+
+    // Gửi tin nhắn Telegram xác nhận chạy ngầm (non-blocking)
+    setImmediate(async () => {
+      try {
+        const overview = await financeService.getOverview(chatId);
+        const teleMsg = telegramService.buildTransactionReport(result, overview, 'XÁC NHẬN GIAO DỊCH TIỀN BẠC (TỪ WEB)');
+        await telegramService.sendMessage(chatId, teleMsg, { parse_mode: 'Markdown' });
+      } catch (e) {
+        console.warn('Không thể gửi tin nhắn Telegram thông báo:', e.message);
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

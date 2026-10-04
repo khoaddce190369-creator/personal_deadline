@@ -30,6 +30,12 @@ async function initDb() {
         created_at INTEGER
       )
     `);
+    await db.execute(`
+      CREATE INDEX IF NOT EXISTS idx_deadlines_chat_status ON deadlines (chat_id, status, deadline_time ASC)
+    `);
+    await db.execute(`
+      CREATE INDEX IF NOT EXISTS idx_deadlines_active_notified ON deadlines (status, notified)
+    `);
     
     // Bảng quản lý các quỹ tài chính (funds)
     await db.execute(`
@@ -56,6 +62,12 @@ async function initDb() {
         fund_name TEXT NOT NULL,
         created_at INTEGER NOT NULL
       )
+    `);
+    await db.execute(`
+      CREATE INDEX IF NOT EXISTS idx_transactions_chat_created ON transactions (chat_id, created_at DESC)
+    `);
+    await db.execute(`
+      CREATE INDEX IF NOT EXISTS idx_transactions_chat_fund_time ON transactions (chat_id, fund_name, created_at)
     `);
 
     // Bảng cài đặt ngân sách / hạn mức chi tiêu tuần

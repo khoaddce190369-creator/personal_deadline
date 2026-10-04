@@ -8,19 +8,35 @@ const bot = new TelegramBot(config.botToken, { polling: true });
 const pendingDeadlines = new Map();
 const pendingFinances = new Map();
 
+// Bộ nhớ đệm danh sách user hợp lệ để phản hồi tin nhắn tức thì (0ms)
+const allowedUsersCache = new Set();
+if (config.adminChatId) {
+  allowedUsersCache.add(config.adminChatId.toString());
+}
+
+async function isUserAllowed(chatId) {
+  if (allowedUsersCache.has(chatId)) return true;
+  const userRes = await db.execute({ sql: `SELECT chat_id FROM allowed_users WHERE chat_id = ?`, args: [chatId] });
+  if (userRes.rows.length > 0) {
+    allowedUsersCache.add(chatId);
+    return true;
+  }
+  return false;
+}
+
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id.toString();
   const text = msg.text;
   if (!text) return;
 
   try {
-    // 1. Kiểm tra xem user đã được phép dùng chưa
-    const userRes = await db.execute({ sql: `SELECT * FROM allowed_users WHERE chat_id = ?`, args: [chatId] });
-    const isAllowed = userRes.rows.length > 0;
+    // 1. Kiểm tra xem user đã được phép dùng chưa (sử dụng in-memory cache)
+    const isAllowed = await isUserAllowed(chatId);
 
     if (!isAllowed) {
       if (text === config.inviteCode) {
         await db.execute({ sql: `INSERT INTO allowed_users (chat_id, joined_at) VALUES (?, ?)`, args: [chatId, Date.now()] });
+        allowedUsersCache.add(chatId);
         return bot.sendMessage(
           chatId,
           '✅ *Xác thực thành công! Chào mừng bạn.*\n\n' +
