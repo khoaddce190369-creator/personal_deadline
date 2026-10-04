@@ -13,7 +13,6 @@
     <header>
       <h1>HỆ THỐNG TRỢ LÝ</h1>
       <p>Quản lý Deadline & Tài chính</p>
-      <p style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">Nhập ID và mã PIN lấy từ Bot Telegram (/web)</p>
     </header>
     <div class="login-box">
       <input type="text" id="chat-id-input" placeholder="Nhập ID Telegram..." class="input-field">
@@ -27,7 +26,6 @@
   <div class="container" id="app-container" style="display: none;">
     <header>
       <h1 id="app-header-title">BẢNG ĐIỀU KHIỂN</h1>
-      <p>Đồng bộ 2 chiều với Bot Telegram</p>
       <button onclick="logout()" class="btn-del" style="margin-top: 10px;">Đăng xuất</button>
     </header>
 
@@ -58,29 +56,28 @@
         <div class="stat-card">
           <div class="stat-header-row">
             <div class="stat-title">TỔNG SỐ TIỀN</div>
-            <button class="btn-small" onclick="handleEditTotalBalance()">Sửa tổng tiền</button>
+            <button class="btn-small" onclick="handleEditTotalBalance()">Sửa số tiền</button>
           </div>
           <div class="stat-value neon" id="total-balance-display">0 đ</div>
-          <div class="stat-sub">Biến động theo mọi thu / chi & quỹ (khi quỹ nợ tăng thì tổng tiền giảm)</div>
         </div>
 
         <!-- Hạn mức chi tiêu tuần -->
         <div class="stat-card">
           <div class="stat-header-row">
-            <div class="stat-title">TIẾN ĐỘ TUẦN NÀY (<span id="week-label-display">Hiện tại</span>)</div>
-            <span class="badge-tag">Hết tuần tự dồn dư sang Tiết kiệm</span>
+            <div class="stat-title">TIẾN ĐỘ TUẦN (<span id="week-label-display">Hiện tại</span>)</div>
+            <button class="btn-small" onclick="handleEditWeeklyBudget()">Sửa hạn mức</button>
           </div>
           <div class="budget-stat-row">
             <div>
-              <span class="budget-label">Hạn mức tuần:</span>
+              <span class="budget-label">Hạn mức:</span>
               <span class="budget-val" id="weekly-budget-display">500,000 đ</span>
             </div>
             <div>
-              <span class="budget-label">Đã chi tuần này:</span>
+              <span class="budget-label">Đã chi:</span>
               <span class="budget-val" id="weekly-spent-display" style="color: var(--danger);">0 đ</span>
             </div>
             <div>
-              <span class="budget-label">Còn lại tuần này:</span>
+              <span class="budget-label">Còn lại:</span>
               <span class="budget-val" id="weekly-remaining-display">500,000 đ</span>
             </div>
           </div>
@@ -89,14 +86,14 @@
           <div class="progress-bar-container">
             <div class="progress-bar-fill" id="budget-progress-bar" style="width: 0%;"></div>
           </div>
-          <div class="progress-info" id="budget-progress-text">Đã chi tiêu trong tuần</div>
+          <div class="progress-info" id="budget-progress-text"></div>
         </div>
       </div>
 
       <!-- 2. Danh sách các Quỹ (Cho phép sửa số dư trực tiếp) -->
       <div class="section-box">
         <div class="section-box-header">
-          <h3>DANH SÁCH QUỸ TÀI CHÍNH</h3>
+          <h3>DANH SÁCH QUỸ</h3>
         </div>
 
         <div id="funds-list" class="funds-grid">
@@ -107,7 +104,7 @@
       <!-- 3. Ghi nhận giao dịch nhanh -->
       <div class="section-box">
         <div class="section-box-header">
-          <h3>GHI NHẬN GIAO DỊCH (THU / CHI)</h3>
+          <h3>GHI GIAO DỊCH</h3>
         </div>
 
         <div class="trans-form">
@@ -121,22 +118,22 @@
           </div>
 
           <div class="form-row">
-            <input type="text" id="trans-amount-input" placeholder="Số tiền (VD: 50k, 100k, 50000)" class="input-field">
+            <input type="text" id="trans-amount-input" placeholder="Số tiền (VD: 50k)" class="input-field">
             <select id="trans-fund-select" class="input-field">
               <option value="Tiêu dùng">Tiêu dùng (300k/tuần)</option>
               <option value="Phát sinh">Phát sinh (200k/tuần)</option>
               <option value="Trả nợ">Trả nợ (-700k/tháng)</option>
-              <option value="Tiết kiệm">Tiết kiệm (Tích lũy)</option>
+              <option value="Tiết kiệm">Tiết kiệm</option>
             </select>
           </div>
 
           <div class="form-row">
-            <input type="text" id="trans-desc-input" placeholder="Nội dung (VD: ăn trưa, gym, trả nợ...)" class="input-field" style="flex: 2;">
-            <input type="text" id="trans-time-input" placeholder="Thời gian (VD: 12/00 hoặc để trống = hiện tại)" class="input-field" style="flex: 1;">
+            <input type="text" id="trans-desc-input" placeholder="Nội dung (tùy chọn)" class="input-field" style="flex: 2;">
+            <input type="text" id="trans-time-input" placeholder="Thời gian (trống = hiện tại)" class="input-field" style="flex: 1;">
           </div>
           
           <button class="btn-main" onclick="handleAddTransaction()" style="width: 100%; margin-top: 5px;">
-            LƯU GIAO DỊCH
+            LƯU
           </button>
         </div>
       </div>
@@ -144,14 +141,14 @@
       <!-- 4. Lịch sử giao dịch -->
       <div class="section-box">
         <div class="section-box-header">
-          <h3>LỊCH SỬ THU / CHI & KẾT CHUYỂN</h3>
+          <h3>LỊCH SỬ GIAO DỊCH</h3>
         </div>
 
         <!-- Bộ lọc lịch sử -->
         <div class="tabs filter-tabs">
           <button class="tab-btn active" onclick="loadTransactions('all')">TẤT CẢ</button>
-          <button class="tab-btn" onclick="loadTransactions('expense')">CHI TIÊU (-)</button>
-          <button class="tab-btn" onclick="loadTransactions('income')">THU / DƯ (+)</button>
+          <button class="tab-btn" onclick="loadTransactions('expense')">CHI TIÊU</button>
+          <button class="tab-btn" onclick="loadTransactions('income')">THU NHẬP</button>
           <button class="tab-btn" onclick="loadTransactions('week')">TUẦN NÀY</button>
         </div>
 

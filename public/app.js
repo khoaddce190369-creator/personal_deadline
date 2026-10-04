@@ -3,6 +3,7 @@ let currentFinanceFilter = 'all';
 let currentTransType = 'expense';
 let currentSection = localStorage.getItem('activeSection') || 'deadline';
 let myChatId = localStorage.getItem('chatId');
+let overviewData = null;
 
 // Khởi động khi tải trang
 if (myChatId) {
@@ -174,6 +175,7 @@ async function loadFinanceOverview() {
   try {
     const res = await fetch(`/api/finance/overview?chatId=${myChatId}`);
     const data = await res.json();
+    overviewData = data;
 
     // 1. Cập nhật Tổng tiền tất cả các quỹ
     document.getElementById('total-balance-display').textContent = formatMoney(data.totalBalance);
@@ -200,12 +202,12 @@ async function loadFinanceOverview() {
 
     if (percentage >= 100 || data.remainingWeek < 0) {
       progressBar.classList.add('danger');
-      progressText.innerHTML = `<strong style="color: var(--danger)">[CẢNH BÁO: ĐÃ VƯỢT HẠN MỨC TUẦN NÀY]</strong> (${percentage}%)`;
+      progressText.innerHTML = `<strong style="color: var(--danger)">Vượt hạn mức (${percentage}%)</strong>`;
     } else if (percentage >= 75) {
       progressBar.classList.add('warning');
-      progressText.innerHTML = `<span style="color: var(--warning)">Đã chi ${percentage}% định mức tuần (${formatMoney(data.spentThisWeek)} / ${formatMoney(data.weeklyBudget)})</span>`;
+      progressText.innerHTML = `<span style="color: var(--warning)">Đã chi ${percentage}% (${formatMoney(data.spentThisWeek)} / ${formatMoney(data.weeklyBudget)})</span>`;
     } else {
-      progressText.textContent = `Đã chi ${percentage}% định mức tuần (${formatMoney(data.spentThisWeek)} / ${formatMoney(data.weeklyBudget)})`;
+      progressText.textContent = `Đã chi ${percentage}% (${formatMoney(data.spentThisWeek)} / ${formatMoney(data.weeklyBudget)})`;
     }
 
     // 3. Render danh sách 4 Quỹ chuẩn (kèm chức năng chỉnh sửa số tiền)
@@ -216,32 +218,43 @@ async function loadFinanceOverview() {
   }
 }
 
-// Render thẻ các Quỹ cố định (hoàn toàn không có icon, có nút chỉnh sửa số tiền)
+// Chỉnh sửa hạn mức chi tiêu tuần trực tiếp qua Web
+async function handleEditWeeklyBudget() {
+  const currentBudget = overviewData ? overviewData.weeklyBudget : 500000;
+  const input = prompt('Nhập hạn mức tuần mới (VD: 500k, 700k):', currentBudget);
+  if (input === null || input.trim() === '') return;
+
+  try {
+    const res = await fetch('/api/finance/weekly-budget', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId: myChatId, amount: input.trim() })
+    });
+    const result = await res.json();
+    if (result.success) {
+      loadFinanceOverview();
+    } else {
+      alert('Lỗi: ' + (result.error || 'Không thể cập nhật hạn mức'));
+    }
+  } catch (err) {
+    alert('Lỗi kết nối khi cập nhật hạn mức');
+  }
+}
+
+// Render thẻ các Quỹ cố định (hoàn toàn không có icon, không ghi chú thừa)
 function renderFunds(funds) {
   const fundsList = document.getElementById('funds-list');
   fundsList.innerHTML = '';
 
   const fundMeta = {
-    'Tiêu dùng': {
-      allowance: '300,000 đ/tuần',
-      desc: 'Ăn uống, hết tuần tự reset, tiền còn dư cộng vào Tiết kiệm'
-    },
-    'Phát sinh': {
-      allowance: '200,000 đ/tuần',
-      desc: 'Giặt đồ, xăng xe, mua lặt vặt... hết tuần tự chuyển dư sang Tiết kiệm'
-    },
-    'Trả nợ': {
-      allowance: '-700,000 đ/tháng',
-      desc: 'Mỗi tháng sẽ là -700.000 đ'
-    },
-    'Tiết kiệm': {
-      allowance: 'Tích lũy liên tục',
-      desc: 'Nhận tiền nạp trực tiếp & tiền dư từ các quỹ'
-    }
+    'Tiêu dùng': '300k/tuần',
+    'Phát sinh': '200k/tuần',
+    'Trả nợ': '-700k/tháng',
+    'Tiết kiệm': 'Tích lũy'
   };
 
   funds.forEach(fund => {
-    const meta = fundMeta[fund.name] || { allowance: '', desc: '' };
+    const allowance = fundMeta[fund.name] || '';
     const card = document.createElement('div');
     card.className = 'fund-card';
     const isNegative = Number(fund.balance) < 0;
@@ -249,13 +262,10 @@ function renderFunds(funds) {
     card.innerHTML = `
       <div class="fund-name">
         <span>${escapeHtml(fund.name)}</span>
-        <span class="fund-tag-pill">${meta.allowance}</span>
+        <span class="fund-tag-pill">${allowance}</span>
       </div>
       <div class="fund-balance ${isNegative ? 'negative' : ''}">
         ${formatMoney(fund.balance)}
-      </div>
-      <div class="fund-note">
-        ${meta.desc}
       </div>
       <div style="margin-top: 10px; border-top: 1px dashed var(--border-color); padding-top: 8px; text-align: right;">
         <button class="btn-small" onclick="handleEditFundBalance(${fund.id}, '${escapeHtml(fund.name)}', ${fund.balance})">Sửa số tiền</button>
@@ -267,7 +277,7 @@ function renderFunds(funds) {
 
 // Chỉnh sửa số tiền của bất kỳ quỹ nào trực tiếp qua Web
 async function handleEditFundBalance(fundId, fundName, currentBalance) {
-  const input = prompt(`Nhập số tiền mới cho quỹ "${fundName}" (VD: 500k, -700k, 0, 1.5tr):`, currentBalance);
+  const input = prompt(`Nhập số tiền mới cho quỹ "${fundName}" (VD: 500k, -700k):`, currentBalance);
   if (input === null || input.trim() === '') return;
 
   try {
@@ -291,7 +301,7 @@ async function handleEditFundBalance(fundId, fundName, currentBalance) {
 // Chỉnh sửa tổng số tiền trực tiếp qua Web
 async function handleEditTotalBalance() {
   const currentTotalText = document.getElementById('total-balance-display').textContent.trim();
-  const input = prompt(`Nhập tổng số tiền mới của bạn:\n(Hiện tại: ${currentTotalText})\nVD: 5tr, 10000000, 500k, 0:`);
+  const input = prompt(`Nhập tổng số tiền mới (VD: 5tr, 500k):`, currentTotalText.replace(/[^\d-]/g, ''));
   if (input === null || input.trim() === '') return;
 
   try {
@@ -351,13 +361,12 @@ async function handleAddTransaction() {
   const nowDisplay = dayjs().format('HH:mm DD/MM/YYYY');
   const timeDisplay = timeStr ? timeStr : `${nowDisplay} (Mặc định thời điểm nhập)`;
 
-  const confirmMsg = `XÁC NHẬN GIAO DỊCH TIỀN BẠC:\n\n`
-                   + `• Phân loại: ${typeLabel}\n`
-                   + `• Số tiền: ${amountStr}\n`
+  const confirmMsg = `XÁC NHẬN GIAO DỊCH:\n`
+                   + `• ${typeLabel}: ${amountStr}\n`
                    + `• Quỹ: ${fundName}\n`
                    + `• Nội dung: ${descLabel}\n`
                    + `• Thời gian: ${timeDisplay}\n\n`
-                   + `Bạn có xác nhận muốn lưu giao dịch này?`;
+                   + `Lưu giao dịch này?`;
 
   if (!confirm(confirmMsg)) {
     return;
@@ -385,13 +394,10 @@ async function handleAddTransaction() {
       loadFinanceOverview();
       loadTransactions(currentFinanceFilter);
       alert(
-        `ĐÃ LƯU GIAO DỊCH THÀNH CÔNG!\n\n` +
-        `• Phân loại: ${result.type === 'income' ? 'Thu nhập (+)' : 'Chi tiêu (-)'}\n` +
-        `• Số tiền: ${formatMoney(result.amount)}\n` +
-        `• Quỹ: ${result.fund_name} (Số dư mới: ${formatMoney(result.fund_balance)})\n` +
-        `• Nội dung: ${result.description}\n` +
-        `• Thời gian: ${dayjs(result.created_at).format('HH:mm DD/MM/YYYY')}\n` +
-        `• Tổng số tiền: ${formatMoney(result.total_balance)}`
+        `Đã lưu giao dịch:\n` +
+        `• ${result.type === 'income' ? 'Thu' : 'Chi'}: ${formatMoney(result.amount)}\n` +
+        `• Quỹ: ${result.fund_name} (${formatMoney(result.fund_balance)})\n` +
+        `• Tổng tiền: ${formatMoney(result.total_balance)}`
       );
     } else {
       alert('Lỗi: ' + (result.error || 'Không thể thêm giao dịch'));
@@ -464,7 +470,7 @@ async function loadTransactions(filter = currentFinanceFilter) {
 
 // Xóa giao dịch (hoàn lại số dư quỹ tương ứng)
 async function handleDeleteTransaction(id) {
-  if (confirm('Bạn có chắc muốn xóa giao dịch này? (Số tiền sẽ được tự động hoàn lại vào quỹ)')) {
+  if (confirm('Xóa giao dịch này? Số tiền sẽ được hoàn lại vào quỹ.')) {
     try {
       const res = await fetch(`/api/finance/transactions/${id}?chatId=${myChatId}`, { method: 'DELETE' });
       const result = await res.json();
