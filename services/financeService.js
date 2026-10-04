@@ -437,8 +437,8 @@ async function addTransaction(chatId, { type, amount, description, fundName, tra
   });
   const newFundBalance = updatedFundRes.rows[0] ? Number(updatedFundRes.rows[0].balance) : 0;
 
-  // Cập nhật số tiền đã chi tuần nếu có override thủ công
-  if (transType === 'expense') {
+  // Cập nhật số tiền đã chi tuần nếu có override thủ công (quỹ Trả nợ và Tiết kiệm không ảnh hưởng đến tiến độ tuần)
+  if (transType === 'expense' && targetFundName !== STANDARD_FUNDS.DEBT && targetFundName !== STANDARD_FUNDS.SAVINGS) {
     const { weekKey } = getCurrentWeekRange();
     await db.execute({
       sql: `UPDATE weekly_budgets SET spent_override = spent_override + ? WHERE chat_id = ? AND week_key = ? AND spent_override IS NOT NULL`,
@@ -492,8 +492,8 @@ async function deleteTransaction(chatId, transactionId) {
     });
   }
 
-  // Cập nhật lại số tiền đã chi tuần nếu có override thủ công
-  if (tx.type === 'expense') {
+  // Cập nhật lại số tiền đã chi tuần nếu có override thủ công (quỹ Trả nợ và Tiết kiệm không ảnh hưởng đến tiến độ tuần)
+  if (tx.type === 'expense' && tx.fund_name !== STANDARD_FUNDS.DEBT && tx.fund_name !== STANDARD_FUNDS.SAVINGS) {
     const { weekKey } = getCurrentWeekRange();
     await db.execute({
       sql: `UPDATE weekly_budgets SET spent_override = MAX(0, spent_override - ?) WHERE chat_id = ? AND week_key = ? AND spent_override IS NOT NULL`,
@@ -580,7 +580,9 @@ async function getOverview(chatId) {
   } else {
     const spentRes = await db.execute({
       sql: `SELECT SUM(amount) as total_spent FROM transactions 
-            WHERE chat_id = ? AND type = 'expense' AND created_at >= ? AND created_at <= ?`,
+            WHERE chat_id = ? AND type = 'expense' 
+              AND fund_name NOT IN ('Trả nợ', 'Tiết kiệm')
+              AND created_at >= ? AND created_at <= ?`,
       args: [chatId, startOfWeek, endOfWeek]
     });
     spentThisWeek = (spentRes.rows[0] && spentRes.rows[0].total_spent) ? Number(spentRes.rows[0].total_spent) : 0;

@@ -232,12 +232,16 @@ function buildTransactionReport(result, overview, titlePrefix = '') {
              + `🕒 Thời gian: *${formatTime(result.created_at)}*\n\n`
              + `🏦 **BÁO CÁO TÌNH HÌNH QUỸ [${fundName}]:**\n`
              + `${fundStatus}\n\n`
-             + `💳 **TỔNG SỐ DƯ HIỆN TẠI:** \`${formatMoney(result.total_balance)}\`\n\n`
-             + `📊 **Tiến độ chi tiêu tuần (${overview.weekInfo ? overview.weekInfo.label : 'Tuần này'}):**\n`
-             + `• Đã chi tuần này: \`${formatMoney(overview.spentThisWeek)}\` / ${formatMoney(overview.weeklyBudget)}\n`
-             + (overview.remainingWeek >= 0
-                 ? `• Còn lại tuần này: \`${formatMoney(overview.remainingWeek)}\` 🟢`
-                 : `• Đã thâm hụt tuần này: \`${formatMoney(Math.abs(overview.remainingWeek))}\` 🔴 (Vượt hạn mức!)`);
+             + `💳 **TỔNG SỐ DƯ HIỆN TẠI:** \`${formatMoney(result.total_balance)}\``;
+
+  // Quỹ trả nợ và tiết kiệm không ảnh hưởng đến tiến độ tuần
+  if (fundName !== 'Trả nợ' && fundName !== 'Tiết kiệm') {
+    report += `\n\n📊 **Tiến độ chi tiêu tuần (${overview.weekInfo ? overview.weekInfo.label : 'Tuần này'}):**\n`
+            + `• Đã chi tuần này: \`${formatMoney(overview.spentThisWeek)}\` / ${formatMoney(overview.weeklyBudget)}\n`
+            + (overview.remainingWeek >= 0
+                ? `• Còn lại tuần này: \`${formatMoney(overview.remainingWeek)}\` 🟢`
+                : `• Đã thâm hụt tuần này: \`${formatMoney(Math.abs(overview.remainingWeek))}\` 🔴 (Vượt hạn mức!)`);
+  }
 
   return report;
 }
