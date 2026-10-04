@@ -220,21 +220,11 @@ app.post('/api/finance/transactions', async (req, res) => {
       transactionTime: finalTime
     });
 
-    // Gửi tin nhắn Telegram xác nhận lại những thông tin đã nhập
+    // Gửi tin nhắn Telegram xác nhận và báo cáo tình hình quỹ & tổng số dư
     try {
       const telegramService = require('./services/telegramService');
-      const { formatMoney, formatTime } = require('./utils/parser');
-      const typeLabel = result.type === 'income' ? '🟢 Thu nhập (+)' : '🔴 Chi tiêu (-)';
-      const timeNote = timeStr && timeStr.trim() ? '' : ' *(Mặc định thời điểm nhập)*';
-      const teleMsg = `✅ **XÁC NHẬN GIAO DỊCH TIỀN BẠC (TỪ WEB)**\n\n`
-                    + `🏷️ Phân loại: ${typeLabel}\n`
-                    + `💵 Số tiền: *${formatMoney(result.amount)}*\n`
-                    + `🏦 Quỹ: *${result.fund_name}* (Số dư mới: \`${formatMoney(result.fund_balance)}\`)\n`
-                    + `📝 Nội dung: *${result.description}*\n`
-                    + `🕒 Thời gian: *${formatTime(result.created_at)}*${timeNote}\n\n`
-                    + `💳 **Tổng số tiền:** \`${formatMoney(result.total_balance)}\`\n`
-                    + `📉 **Còn lại tuần này:** \`${formatMoney(result.remaining_week)}\``;
-
+      const overview = await financeService.getOverview(chatId);
+      const teleMsg = telegramService.buildTransactionReport(result, overview, 'XÁC NHẬN GIAO DỊCH TIỀN BẠC (TỪ WEB)');
       telegramService.sendMessage(chatId, teleMsg, { parse_mode: 'Markdown' });
     } catch (e) {
       console.warn('Không thể gửi tin nhắn Telegram thông báo:', e.message);

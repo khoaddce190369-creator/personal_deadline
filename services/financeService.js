@@ -15,8 +15,8 @@ const STANDARD_FUNDS = {
 };
 
 const WEEKLY_ALLOWANCES = {
-  [STANDARD_FUNDS.SPENDING]: 500000, // 500k / tuần
-  [STANDARD_FUNDS.EXTRA]: 100000     // 100k / tuần
+  [STANDARD_FUNDS.SPENDING]: 300000, // 300k / tuần (ăn uống)
+  [STANDARD_FUNDS.EXTRA]: 200000     // 200k / tuần (giặt đồ, xăng xe, mua lặt vặt)
 };
 
 const MONTHLY_ALLOWANCES = {
@@ -94,8 +94,8 @@ function formatMoney(amount) {
 
 /**
  * Đảm bảo user có ĐỦ 4 QUỸ và tự động xử lý kết chuyển tuần/tháng:
- * 1. Tiêu dùng: 500k/tuần, hết tuần dư bao nhiêu chuyển sang Tiết kiệm, reset lại 500k.
- * 2. Phát sinh: 100k/tuần, hết tuần dư bao nhiêu chuyển sang Tiết kiệm, reset lại 100k.
+ * 1. Tiêu dùng: 300k/tuần (ăn uống), hết tuần dư bao nhiêu chuyển sang Tiết kiệm, reset lại 300k.
+ * 2. Phát sinh: 200k/tuần (giặt đồ, xăng xe, mua lặt vặt), hết tuần dư bao nhiêu chuyển sang Tiết kiệm, reset lại 200k.
  * 3. Trả nợ: Mỗi tháng sẽ là -700k (-700.000 đ).
  * 4. Tiết kiệm: Nhận tiền dư chuyển sang và tiền nạp, tích lũy không reset.
  */
@@ -588,7 +588,7 @@ async function getOverview(chatId) {
   const debtBalance = debtFund ? Number(debtFund.balance) : 0;
   const savingsBalance = savingsFund ? Number(savingsFund.balance) : 0;
 
-  // Hạn mức chi tiêu tuần cố định: 500k (Tiêu dùng) + 100k (Phát sinh) = 600k
+  // Hạn mức chi tiêu tuần cố định: 300k (Tiêu dùng) + 200k (Phát sinh) = 500k
   const weeklyBudget = WEEKLY_ALLOWANCES[STANDARD_FUNDS.SPENDING] + WEEKLY_ALLOWANCES[STANDARD_FUNDS.EXTRA];
   
   // Số tiền còn lại trong tuần của 2 quỹ chi tiêu (Tiêu dùng + Phát sinh)

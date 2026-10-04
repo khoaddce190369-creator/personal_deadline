@@ -45,8 +45,8 @@ Xong! Hệ thống của bạn đã chạy 24/7 hoàn toàn tự động và mi�
 ## Quản lý Tài chính Cá nhân (Hệ thống 4 Quỹ & Tự động kết chuyển chu kỳ)
 
 ### 1. Quy tắc 4 Quỹ:
-1. **Quỹ Tiêu dùng** (Tag `tiêu dùng`): Cấp **500.000 đ / tuần**. Hết tuần tự động reset lại 500k, tiền còn dư tuần đó được tự động cộng dồn vào **Quỹ Tiết kiệm**.
-2. **Quỹ Phát sinh** (Tag `phát sinh`): Cấp **100.000 đ / tuần** (dành cho gym, việc đột xuất...). Hết tuần tự động reset lại 100k, tiền còn dư tự động chuyển vào **Quỹ Tiết kiệm**.
+1. **Quỹ Tiêu dùng** (Tag `tiêu dùng`): Cấp **300.000 đ / tuần** (ăn uống). Hết tuần tự động reset lại 300k, tiền còn dư tuần đó được tự động cộng dồn vào **Quỹ Tiết kiệm**.
+2. **Quỹ Phát sinh** (Tag `phát sinh`): Cấp **200.000 đ / tuần** (giặt đồ, xăng xe, mua lặt vặt...). Hết tuần tự động reset lại 200k, tiền còn dư tự động chuyển vào **Quỹ Tiết kiệm**.
 3. **Quỹ Trả nợ** (Tag `trả nợ` / `tra no` / `no`): Mỗi tháng định mức ban đầu là **-700.000 đ / tháng**. Hết tháng reset về -700k. Có thể trả nợ bằng tin nhắn `+số tiền, trả nợ`.
 4. **Quỹ Tiết kiệm** (Tag `tiết kiệm`): Tích lũy liên tục (nhận tiền nạp trực tiếp & tiền dư từ các quỹ tuần cũ).
 
@@ -58,7 +58,7 @@ Xong! Hệ thống của bạn đã chạy 24/7 hoàn toàn tự động và mi�
 > **Quy tắc khi nhập giao dịch:**
 > - Nếu không ghi tag: Dấu **`-`** (chi tiêu) tự động trừ vào **Quỹ Tiêu dùng**; Dấu **`+`** (thu nhập) tự động cộng vào **Quỹ Tiết kiệm**.
 > - Nếu không nhập thời gian (để trống): Thời gian sẽ là **mặc định ngay tại thời điểm nhập**.
-> - Hệ thống luôn gửi **tin nhắn xác nhận lại toàn bộ thông tin đã nhập** để bạn kiểm tra trước và sau khi lưu giao dịch.
+> - Sau mỗi giao dịch, bot Telegram sẽ **báo cáo chi tiết tình hình quỹ vừa nhập** (số dư, hạn mức, tình trạng thâm hụt/dư) đồng thời **báo tổng số dư hiện tại** của bạn.
 
 #### Ví dụ:
 - Chi tiêu dùng: `-50k, tiêu dùng, ăn trưa, 12/00`

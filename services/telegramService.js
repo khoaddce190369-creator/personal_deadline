@@ -27,9 +27,10 @@ bot.on('message', async (msg) => {
           '📌 **1. QUẢN LÝ DEADLINE:**\n' +
           '`Nội dung, giờ/phút/ngày/tháng, trước bao lâu`\n' +
           'VD: `Họp team, 15/30, 30p`\n\n' +
-          '💰 **2. QUẢN LÝ 3 QUỸ TIỀN BẠC:**\n' +
-          '• `Tiêu dùng` (500k/tuần, dư chuyển Tiết kiệm)\n' +
-          '• `Phát sinh` (100k/tuần, dư chuyển Tiết kiệm)\n' +
+          '💰 **2. QUẢN LÝ 4 QUỸ TIỀN BẠC:**\n' +
+          '• `Tiêu dùng` (300k/tuần, ăn uống, dư chuyển Tiết kiệm)\n' +
+          '• `Phát sinh` (200k/tuần, giặt đồ, xăng xe, lặt vặt, dư chuyển Tiết kiệm)\n' +
+          '• `Trả nợ` (-700k/tháng)\n' +
           '• `Tiết kiệm` (Tích lũy, nhận tiền nạp & tiền dư)\n\n' +
           'Cú pháp: `+/-số tiền, tag, nội dung, thời gian`\n' +
           'VD: `-50k, tiêu dùng, ăn trưa, 12/00`\n' +
@@ -67,8 +68,8 @@ bot.on('message', async (msg) => {
         `💰 **1. QUẢN LÝ TÀI CHÍNH (4 QUỸ)**\n` +
         `• **Cú pháp:** \`+/-số tiền, tag, nội dung, thời gian\`\n` +
         `• **4 Quỹ gồm:**\n` +
-        `  - *Tiêu dùng*: 500k/tuần (dư cuối tuần tự sang Tiết kiệm)\n` +
-        `  - *Phát sinh*: 100k/tuần (gym, nợ... dư cuối tuần tự sang Tiết kiệm)\n` +
+        `  - *Tiêu dùng*: 300k/tuần (ăn uống, dư cuối tuần tự sang Tiết kiệm)\n` +
+        `  - *Phát sinh*: 200k/tuần (giặt đồ, xăng xe, lặt vặt, dư cuối tuần tự sang Tiết kiệm)\n` +
         `  - *Trả nợ*: Mỗi tháng là -700k (-700.000 đ)\n` +
         `  - *Tiết kiệm*: Tích lũy liên tục (nhận tiền nạp & tiền dư các quỹ)\n` +
         `• **Quy tắc khi không ghi tag:**\n` +
@@ -109,7 +110,7 @@ bot.on('message', async (msg) => {
       reply += `💳 **Tổng số tiền:** \`${formatMoney(overview.totalBalance)}\`\n\n`;
 
       reply += `📊 **Tiến độ tuần (${overview.weekInfo.label}):**\n`;
-      reply += `• Hạn mức cấp tuần: \`${formatMoney(overview.weeklyBudget)}\` (500k + 100k)\n`;
+      reply += `• Hạn mức cấp tuần: \`${formatMoney(overview.weeklyBudget)}\` (300k + 200k)\n`;
       reply += `• Đã chi tiêu tuần này: \`${formatMoney(overview.spentThisWeek)}\`\n`;
       if (overview.remainingWeek >= 0) {
         reply += `• Còn lại tuần này: \`${formatMoney(overview.remainingWeek)}\` 🟢\n`;
@@ -119,8 +120,8 @@ bot.on('message', async (msg) => {
       reply += `*(Hết tuần, toàn bộ số dư còn lại sẽ tự động cộng dồn sang Quỹ Tiết kiệm)*\n\n`;
 
       reply += `🏦 **Chi tiết 4 Quỹ:**\n`;
-      reply += `• **Tiêu dùng:** \`${formatMoney(overview.spendingBalance)}\` / 500,000 đ\n`;
-      reply += `• **Phát sinh:** \`${formatMoney(overview.extraBalance)}\` / 100,000 đ\n`;
+      reply += `• **Tiêu dùng:** \`${formatMoney(overview.spendingBalance)}\` / 300,000 đ (Ăn uống)\n`;
+      reply += `• **Phát sinh:** \`${formatMoney(overview.extraBalance)}\` / 200,000 đ (Giặt đồ, xăng xe, lặt vặt)\n`;
       reply += `• **Trả nợ:** \`${formatMoney(overview.debtBalance)}\` / -700,000 đ/tháng\n`;
       reply += `• **Tiết kiệm:** \`${formatMoney(overview.savingsBalance)}\` (Tích lũy)\n\n`;
 
@@ -199,6 +200,62 @@ bot.on('message', async (msg) => {
   }
 });
 
+// Tạo nội dung tin nhắn báo cáo chi tiết tình hình quỹ và tổng số dư sau giao dịch
+function buildTransactionReport(result, overview, titlePrefix = '') {
+  const typeLabel = result.type === 'income' ? '🟢 Thu nhập (+)' : '🔴 Chi tiêu (-)';
+  const fundName = result.fund_name;
+  const fundBal = result.fund_balance;
+
+  // Báo cáo chi tiết tình hình quỹ vừa nhập
+  let fundStatus = '';
+  if (fundName === 'Tiêu dùng') {
+    if (fundBal >= 0) {
+      fundStatus = `• Hạn mức cấp: \`300,000 đ/tuần\` (Ăn uống)\n`
+                 + `• Số dư quỹ còn lại: \`${formatMoney(fundBal)}\` / 300,000 đ 🟢`;
+    } else {
+      fundStatus = `• Hạn mức cấp: \`300,000 đ/tuần\` (Ăn uống)\n`
+                 + `• Tình trạng quỹ: Đã thâm hụt \`${formatMoney(Math.abs(fundBal))}\` 🔴 (Vượt hạn mức ăn uống tuần này!)`;
+    }
+  } else if (fundName === 'Phát sinh') {
+    if (fundBal >= 0) {
+      fundStatus = `• Hạn mức cấp: \`200,000 đ/tuần\` (Giặt đồ, xăng xe, mua lặt vặt)\n`
+                 + `• Số dư quỹ còn lại: \`${formatMoney(fundBal)}\` / 200,000 đ 🟢`;
+    } else {
+      fundStatus = `• Hạn mức cấp: \`200,000 đ/tuần\` (Giặt đồ, xăng xe, mua lặt vặt)\n`
+                 + `• Tình trạng quỹ: Đã thâm hụt \`${formatMoney(Math.abs(fundBal))}\` 🔴 (Vượt hạn mức phát sinh tuần này!)`;
+    }
+  } else if (fundName === 'Trả nợ') {
+    if (fundBal < 0) {
+      fundStatus = `• Định mức tháng: \`-700,000 đ/tháng\`\n`
+                 + `• Số dư nợ hiện tại: \`${formatMoney(fundBal)}\` (Còn nợ: \`${formatMoney(Math.abs(fundBal))}\`)`;
+    } else {
+      fundStatus = `• Định mức tháng: \`-700,000 đ/tháng\`\n`
+                 + `• Tình trạng quỹ: Đã thanh toán hết nợ tháng này (Dư: \`${formatMoney(fundBal)}\`) 🟢`;
+    }
+  } else if (fundName === 'Tiết kiệm') {
+    fundStatus = `• Loại quỹ: \`Tích lũy liên tục\`\n`
+               + `• Số dư tiết kiệm hiện tại: \`${formatMoney(fundBal)}\` 🟢`;
+  }
+
+  const heading = titlePrefix ? `✅ **${titlePrefix}**` : `✅ **ĐÃ LƯU GIAO DỊCH THÀNH CÔNG!**`;
+
+  let report = `${heading}\n\n`
+             + `🏷️ Phân loại: ${typeLabel}\n`
+             + `💵 Số tiền: *${formatMoney(result.amount)}*\n`
+             + `📝 Nội dung: *${result.description}*\n`
+             + `🕒 Thời gian: *${formatTime(result.created_at)}*\n\n`
+             + `🏦 **BÁO CÁO TÌNH HÌNH QUỸ [${fundName}]:**\n`
+             + `${fundStatus}\n\n`
+             + `💳 **TỔNG SỐ DƯ HIỆN TẠI:** \`${formatMoney(result.total_balance)}\`\n\n`
+             + `📊 **Tiến độ chi tiêu tuần (${overview.weekInfo ? overview.weekInfo.label : 'Tuần này'}):**\n`
+             + `• Đã chi tuần này: \`${formatMoney(overview.spentThisWeek)}\` / ${formatMoney(overview.weeklyBudget)}\n`
+             + (overview.remainingWeek >= 0
+                 ? `• Còn lại tuần này: \`${formatMoney(overview.remainingWeek)}\` 🟢`
+                 : `• Đã thâm hụt tuần này: \`${formatMoney(Math.abs(overview.remainingWeek))}\` 🔴 (Vượt hạn mức!)`);
+
+  return report;
+}
+
 bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id.toString();
   const messageId = query.message.message_id;
@@ -213,15 +270,8 @@ bot.on('callback_query', async (query) => {
       const result = await financeService.addTransaction(chatId, data);
       pendingFinances.delete(chatId);
 
-      const typeLabel = result.type === 'income' ? '🟢 Thu nhập (+)' : '🔴 Chi tiêu (-)';
-      let confirmMsg = `✅ **ĐÃ LƯU GIAO DỊCH THÀNH CÔNG!**\n\n`
-                     + `🏷️ Loại: ${typeLabel}\n`
-                     + `💵 Số tiền: *${formatMoney(result.amount)}*\n`
-                     + `🏦 Quỹ: *${result.fund_name}* (Số dư mới: \`${formatMoney(result.fund_balance)}\`)\n`
-                     + `📝 Nội dung: *${result.description}*\n`
-                     + `🕒 Thời gian: *${formatTime(result.created_at)}*\n\n`
-                     + `💳 **Tổng số tiền:** \`${formatMoney(result.total_balance)}\`\n`
-                     + `📉 **Còn lại tuần này:** \`${formatMoney(result.remaining_week)}\``;
+      const overview = await financeService.getOverview(chatId);
+      const confirmMsg = buildTransactionReport(result, overview, 'ĐÃ LƯU GIAO DỊCH THÀNH CÔNG!');
 
       bot.editMessageText(confirmMsg, { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown' });
     }
@@ -314,5 +364,6 @@ function sendMessage(chatId, text, options) {
 
 module.exports = {
   bot,
-  sendMessage
+  sendMessage,
+  buildTransactionReport
 };

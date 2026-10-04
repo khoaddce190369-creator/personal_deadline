@@ -203,9 +203,9 @@ async function loadFinanceOverview() {
       progressText.innerHTML = `<strong style="color: var(--danger)">[CẢNH BÁO: ĐÃ VƯỢT HẠN MỨC TUẦN NÀY]</strong> (${percentage}%)`;
     } else if (percentage >= 75) {
       progressBar.classList.add('warning');
-      progressText.innerHTML = `<span style="color: var(--warning)">Đã chi ${percentage}% định mức tuần (${formatMoney(data.spentThisWeek)} / 600k)</span>`;
+      progressText.innerHTML = `<span style="color: var(--warning)">Đã chi ${percentage}% định mức tuần (${formatMoney(data.spentThisWeek)} / ${formatMoney(data.weeklyBudget)})</span>`;
     } else {
-      progressText.textContent = `Đã chi ${percentage}% định mức tuần (${formatMoney(data.spentThisWeek)} / 600k)`;
+      progressText.textContent = `Đã chi ${percentage}% định mức tuần (${formatMoney(data.spentThisWeek)} / ${formatMoney(data.weeklyBudget)})`;
     }
 
     // 3. Render danh sách 4 Quỹ chuẩn (kèm chức năng chỉnh sửa số tiền)
@@ -223,12 +223,12 @@ function renderFunds(funds) {
 
   const fundMeta = {
     'Tiêu dùng': {
-      allowance: '500,000 đ/tuần',
-      desc: 'Hết tuần tự reset, tiền còn dư cộng vào Tiết kiệm'
+      allowance: '300,000 đ/tuần',
+      desc: 'Ăn uống, hết tuần tự reset, tiền còn dư cộng vào Tiết kiệm'
     },
     'Phát sinh': {
-      allowance: '100,000 đ/tuần',
-      desc: 'Tập gym, trả nợ... hết tuần tự chuyển dư sang Tiết kiệm'
+      allowance: '200,000 đ/tuần',
+      desc: 'Giặt đồ, xăng xe, mua lặt vặt... hết tuần tự chuyển dư sang Tiết kiệm'
     },
     'Trả nợ': {
       allowance: '-700,000 đ/tháng',
