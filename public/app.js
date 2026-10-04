@@ -287,6 +287,7 @@ async function saveWeeklySpent(amountVal) {
         overviewData = result.overview;
       }
       loadFinanceOverview();
+      loadTransactions(currentFinanceFilter);
       showToast('Đã lưu chi tiêu tuần!');
     } else {
       showToast('Lỗi: ' + (result.error || 'Không thể lưu chi tiêu'), true);
