@@ -350,19 +350,6 @@ async function updateFundBalance(chatId, fundIdentifier, newBalanceStr) {
     await saveWeeklySpentRecord(chatId, newSpent);
   }
 
-  // Ghi lại vết giao dịch điều chỉnh
-  await db.execute({
-    sql: `INSERT INTO transactions (chat_id, type, amount, description, fund_name, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-    args: [
-      chatId,
-      delta >= 0 ? 'income' : 'expense',
-      Math.abs(delta),
-      `Điều chỉnh số dư quỹ ${fund.name} (${formatMoney(oldBalance)} -> ${formatMoney(newBalance)})`,
-      fund.name,
-      Date.now()
-    ]
-  });
-
   const overview = await getOverview(chatId);
   return {
     success: true,
@@ -371,37 +358,16 @@ async function updateFundBalance(chatId, fundIdentifier, newBalanceStr) {
   };
 }
 
-// Chỉnh sửa tổng số tiền trực tiếp qua Web
+// Chỉnh sửa tổng số tiền trực tiếp qua Web (không ghi log vào transactions)
 async function updateTotalMoney(chatId, newAmountStr) {
   await ensureUserFundsAndRollover(chatId);
 
   const newAmount = parseSignedAmount(newAmountStr);
 
-  const stateRes = await db.execute({
-    sql: `SELECT total_money FROM user_finance_state WHERE chat_id = ?`,
-    args: [chatId]
-  });
-  const oldAmount = stateRes.rows[0] ? Number(stateRes.rows[0].total_money || 0) : 0;
-
   await db.execute({
     sql: `UPDATE user_finance_state SET total_money = ?, updated_at = ? WHERE chat_id = ?`,
     args: [newAmount, Date.now(), chatId]
   });
-
-  const delta = newAmount - oldAmount;
-  if (delta !== 0) {
-    await db.execute({
-      sql: `INSERT INTO transactions (chat_id, type, amount, description, fund_name, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [
-        chatId,
-        delta >= 0 ? 'income' : 'expense',
-        Math.abs(delta),
-        `Điều chỉnh tổng số tiền (${formatMoney(oldAmount)} -> ${formatMoney(newAmount)})`,
-        'Tổng tiền',
-        Date.now()
-      ]
-    });
-  }
 
   const overview = await getOverview(chatId);
   return {
@@ -480,19 +446,6 @@ async function setWeeklySpent(chatId, spentStr) {
       await db.execute({
         sql: `UPDATE user_finance_state SET total_money = COALESCE(total_money, 0) - ?, updated_at = ? WHERE chat_id = ?`,
         args: [diff, Date.now(), chatId]
-      });
-
-      // Ghi vết giao dịch điều chỉnh
-      await db.execute({
-        sql: `INSERT INTO transactions (chat_id, type, amount, description, fund_name, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-        args: [
-          chatId,
-          diff > 0 ? 'expense' : 'income',
-          Math.abs(diff),
-          `Điều chỉnh chi tiêu tuần (${formatMoney(oldSpent)} -> ${formatMoney(spent)})`,
-          STANDARD_FUNDS.SPENDING,
-          Date.now()
-        ]
       });
     }
   }
