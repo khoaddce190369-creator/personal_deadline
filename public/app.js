@@ -175,13 +175,19 @@ async function loadFinanceOverview() {
   try {
     const res = await fetch(`/api/finance/overview?chatId=${myChatId}`);
     const data = await res.json();
+    if (!res.ok || !data || !Array.isArray(data.funds)) {
+      console.error('Lỗi khi tải dữ liệu tổng quan:', data ? data.error : 'Không có dữ liệu');
+      return;
+    }
     overviewData = data;
 
     // 1. Cập nhật Tổng tiền tất cả các quỹ
     document.getElementById('total-balance-display').textContent = formatMoney(data.totalBalance);
 
     // 2. Cập nhật Thống kê Tuần
-    document.getElementById('week-label-display').textContent = data.weekInfo.label;
+    if (data.weekInfo && data.weekInfo.label) {
+      document.getElementById('week-label-display').textContent = data.weekInfo.label;
+    }
     document.getElementById('weekly-budget-display').textContent = formatMoney(data.weeklyBudget);
     document.getElementById('weekly-spent-display').textContent = formatMoney(data.spentThisWeek);
 
@@ -196,7 +202,7 @@ async function loadFinanceOverview() {
       remainingEl.style.color = 'var(--accent)';
     }
 
-    const percentage = Math.min(100, Math.round((data.spentThisWeek / data.weeklyBudget) * 100));
+    const percentage = Math.min(100, Math.round((data.spentThisWeek / (data.weeklyBudget || 1)) * 100));
     progressBar.style.width = `${percentage}%`;
     progressBar.className = 'progress-bar-fill';
 
@@ -241,20 +247,14 @@ async function handleEditWeeklyBudget() {
   }
 }
 
-// Render thẻ các Quỹ cố định (hoàn toàn không có icon, không ghi chú thừa)
+// Render thẻ các Quỹ cố định (hoàn toàn không có icon, không tag nhỏ hay ghi chú thừa)
 function renderFunds(funds) {
   const fundsList = document.getElementById('funds-list');
   fundsList.innerHTML = '';
 
-  const fundMeta = {
-    'Tiêu dùng': '300k/tuần',
-    'Phát sinh': '200k/tuần',
-    'Trả nợ': '-700k/tháng',
-    'Tiết kiệm': 'Tích lũy'
-  };
+  if (!Array.isArray(funds)) return;
 
   funds.forEach(fund => {
-    const allowance = fundMeta[fund.name] || '';
     const card = document.createElement('div');
     card.className = 'fund-card';
     const isNegative = Number(fund.balance) < 0;
@@ -262,7 +262,6 @@ function renderFunds(funds) {
     card.innerHTML = `
       <div class="fund-name">
         <span>${escapeHtml(fund.name)}</span>
-        <span class="fund-tag-pill">${allowance}</span>
       </div>
       <div class="fund-balance ${isNegative ? 'negative' : ''}">
         ${formatMoney(fund.balance)}

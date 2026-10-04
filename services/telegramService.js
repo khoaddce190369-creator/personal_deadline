@@ -110,20 +110,19 @@ bot.on('message', async (msg) => {
       reply += `💳 **Tổng số tiền:** \`${formatMoney(overview.totalBalance)}\`\n\n`;
 
       reply += `📊 **Tiến độ tuần (${overview.weekInfo.label}):**\n`;
-      reply += `• Hạn mức cấp tuần: \`${formatMoney(overview.weeklyBudget)}\` (300k + 200k)\n`;
+      reply += `• Hạn mức chi tiêu tuần: \`${formatMoney(overview.weeklyBudget)}\`\n`;
       reply += `• Đã chi tiêu tuần này: \`${formatMoney(overview.spentThisWeek)}\`\n`;
       if (overview.remainingWeek >= 0) {
-        reply += `• Còn lại tuần này: \`${formatMoney(overview.remainingWeek)}\` 🟢\n`;
+        reply += `• Còn lại tuần này: \`${formatMoney(overview.remainingWeek)}\` 🟢\n\n`;
       } else {
-        reply += `• Đã thâm hụt: \`${formatMoney(Math.abs(overview.remainingWeek))}\` 🔴 (Vượt hạn mức!)\n`;
+        reply += `• Đã thâm hụt: \`${formatMoney(Math.abs(overview.remainingWeek))}\` 🔴 (Vượt hạn mức!)\n\n`;
       }
-      reply += `*(Hết tuần, toàn bộ số dư còn lại sẽ tự động cộng dồn sang Quỹ Tiết kiệm)*\n\n`;
 
       reply += `🏦 **Chi tiết 4 Quỹ:**\n`;
-      reply += `• **Tiêu dùng:** \`${formatMoney(overview.spendingBalance)}\` / 300,000 đ (Ăn uống)\n`;
-      reply += `• **Phát sinh:** \`${formatMoney(overview.extraBalance)}\` / 200,000 đ (Giặt đồ, xăng xe, lặt vặt)\n`;
-      reply += `• **Trả nợ:** \`${formatMoney(overview.debtBalance)}\` / -700,000 đ/tháng\n`;
-      reply += `• **Tiết kiệm:** \`${formatMoney(overview.savingsBalance)}\` (Tích lũy)\n\n`;
+      reply += `• **Tiêu dùng:** \`${formatMoney(overview.spendingBalance)}\`\n`;
+      reply += `• **Phát sinh:** \`${formatMoney(overview.extraBalance)}\`\n`;
+      reply += `• **Trả nợ:** \`${formatMoney(overview.debtBalance)}\`\n`;
+      reply += `• **Tiết kiệm:** \`${formatMoney(overview.savingsBalance)}\`\n\n`;
 
       reply += `💡 Gõ \`-50k, ăn trưa\` để chi tiêu hoặc \`+100k\` để thêm tiết kiệm.\n`;
       reply += `💡 Nhắn \`?\` để mở lại bảng hướng dẫn.`;
@@ -208,33 +207,20 @@ function buildTransactionReport(result, overview, titlePrefix = '') {
 
   // Báo cáo chi tiết tình hình quỹ vừa nhập
   let fundStatus = '';
-  if (fundName === 'Tiêu dùng') {
+  if (fundName === 'Tiêu dùng' || fundName === 'Phát sinh') {
     if (fundBal >= 0) {
-      fundStatus = `• Hạn mức cấp: \`300,000 đ/tuần\` (Ăn uống)\n`
-                 + `• Số dư quỹ còn lại: \`${formatMoney(fundBal)}\` / 300,000 đ 🟢`;
+      fundStatus = `• Số dư quỹ hiện tại: \`${formatMoney(fundBal)}\` 🟢`;
     } else {
-      fundStatus = `• Hạn mức cấp: \`300,000 đ/tuần\` (Ăn uống)\n`
-                 + `• Tình trạng quỹ: Đã thâm hụt \`${formatMoney(Math.abs(fundBal))}\` 🔴 (Vượt hạn mức ăn uống tuần này!)`;
-    }
-  } else if (fundName === 'Phát sinh') {
-    if (fundBal >= 0) {
-      fundStatus = `• Hạn mức cấp: \`200,000 đ/tuần\` (Giặt đồ, xăng xe, mua lặt vặt)\n`
-                 + `• Số dư quỹ còn lại: \`${formatMoney(fundBal)}\` / 200,000 đ 🟢`;
-    } else {
-      fundStatus = `• Hạn mức cấp: \`200,000 đ/tuần\` (Giặt đồ, xăng xe, mua lặt vặt)\n`
-                 + `• Tình trạng quỹ: Đã thâm hụt \`${formatMoney(Math.abs(fundBal))}\` 🔴 (Vượt hạn mức phát sinh tuần này!)`;
+      fundStatus = `• Số dư quỹ hiện tại: \`${formatMoney(fundBal)}\` 🔴 (Đã thâm hụt \`${formatMoney(Math.abs(fundBal))}\`)`;
     }
   } else if (fundName === 'Trả nợ') {
     if (fundBal < 0) {
-      fundStatus = `• Định mức tháng: \`-700,000 đ/tháng\`\n`
-                 + `• Số dư nợ hiện tại: \`${formatMoney(fundBal)}\` (Còn nợ: \`${formatMoney(Math.abs(fundBal))}\`)`;
+      fundStatus = `• Số dư nợ hiện tại: \`${formatMoney(fundBal)}\` (Còn nợ: \`${formatMoney(Math.abs(fundBal))}\`) 🔴`;
     } else {
-      fundStatus = `• Định mức tháng: \`-700,000 đ/tháng\`\n`
-                 + `• Tình trạng quỹ: Đã thanh toán hết nợ tháng này (Dư: \`${formatMoney(fundBal)}\`) 🟢`;
+      fundStatus = `• Số dư nợ hiện tại: \`${formatMoney(fundBal)}\` (Đã hết nợ) 🟢`;
     }
   } else if (fundName === 'Tiết kiệm') {
-    fundStatus = `• Loại quỹ: \`Tích lũy liên tục\`\n`
-               + `• Số dư tiết kiệm hiện tại: \`${formatMoney(fundBal)}\` 🟢`;
+    fundStatus = `• Số dư tiết kiệm hiện tại: \`${formatMoney(fundBal)}\` 🟢`;
   }
 
   const heading = titlePrefix ? `✅ **${titlePrefix}**` : `✅ **ĐÃ LƯU GIAO DỊCH THÀNH CÔNG!**`;

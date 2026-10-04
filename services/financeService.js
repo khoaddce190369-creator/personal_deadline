@@ -175,121 +175,21 @@ async function ensureUserFundsAndRollover(chatId) {
     });
     userState.total_money = 0;
   }
-  let rolledOverWeek = false;
-  let rolledOverMonth = false;
 
-  // A. XỬ LÝ TUẦN MỚI CHO TIÊU DÙNG VÀ PHÁT SINH
-  if (userState.last_week_key !== weekKey) {
-    const prevWeek = userState.last_week_key;
-
-    const spendingRes = await db.execute({
-      sql: `SELECT balance FROM funds WHERE chat_id = ? AND name = ?`,
-      args: [chatId, STANDARD_FUNDS.SPENDING]
-    });
-    const extraRes = await db.execute({
-      sql: `SELECT balance FROM funds WHERE chat_id = ? AND name = ?`,
-      args: [chatId, STANDARD_FUNDS.EXTRA]
-    });
-
-    const spendingBal = spendingRes.rows[0] ? Number(spendingRes.rows[0].balance) : 0;
-    const extraBal = extraRes.rows[0] ? Number(extraRes.rows[0].balance) : 0;
-
-    // Kết chuyển tiền dư Quỹ Tiêu dùng sang Tiết kiệm (nếu dư > 0)
-    if (spendingBal > 0) {
-      await db.execute({
-        sql: `UPDATE funds SET balance = balance + ? WHERE chat_id = ? AND name = ?`,
-        args: [spendingBal, chatId, STANDARD_FUNDS.SAVINGS]
-      });
-      await db.execute({
-        sql: `INSERT INTO transactions (chat_id, type, amount, description, fund_name, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-        args: [
-          chatId,
-          'income',
-          spendingBal,
-          `Dư tuần ${prevWeek} (Quỹ Tiêu dùng -> Tiết kiệm)`,
-          STANDARD_FUNDS.SAVINGS,
-          Date.now()
-        ]
-      });
-    }
-
-    // Kết chuyển tiền dư Quỹ Phát sinh sang Tiết kiệm (nếu dư > 0)
-    if (extraBal > 0) {
-      await db.execute({
-        sql: `UPDATE funds SET balance = balance + ? WHERE chat_id = ? AND name = ?`,
-        args: [extraBal, chatId, STANDARD_FUNDS.SAVINGS]
-      });
-      await db.execute({
-        sql: `INSERT INTO transactions (chat_id, type, amount, description, fund_name, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-        args: [
-          chatId,
-          'income',
-          extraBal,
-          `Dư tuần ${prevWeek} (Quỹ Phát sinh -> Tiết kiệm)`,
-          STANDARD_FUNDS.SAVINGS,
-          Date.now()
-        ]
-      });
-    }
-
-    // Reset lại 2 quỹ theo định mức tuần mới
+  // Cập nhật tuần/tháng mới nhất (KHÔNG tự động reset hay chuyển tiền giữa các quỹ, user sẽ tự tay điều chỉnh)
+  if (userState.last_week_key !== weekKey || userState.last_month_key !== monthKey) {
     await db.execute({
-      sql: `UPDATE funds SET balance = ? WHERE chat_id = ? AND name = ?`,
-      args: [WEEKLY_ALLOWANCES[STANDARD_FUNDS.SPENDING], chatId, STANDARD_FUNDS.SPENDING]
+      sql: `UPDATE user_finance_state SET last_week_key = ?, last_month_key = ?, updated_at = ? WHERE chat_id = ?`,
+      args: [weekKey, monthKey, Date.now(), chatId]
     });
-    await db.execute({
-      sql: `UPDATE funds SET balance = ? WHERE chat_id = ? AND name = ?`,
-      args: [WEEKLY_ALLOWANCES[STANDARD_FUNDS.EXTRA], chatId, STANDARD_FUNDS.EXTRA]
-    });
-
-    await db.execute({
-      sql: `UPDATE user_finance_state SET last_week_key = ?, updated_at = ? WHERE chat_id = ?`,
-      args: [weekKey, Date.now(), chatId]
-    });
-
-    rolledOverWeek = true;
   }
 
-  // B. XỬ LÝ THÁNG MỚI CHO QUỸ TRẢ NỢ (Mỗi tháng là -700k)
-  if (userState.last_month_key !== monthKey) {
-    await db.execute({
-      sql: `UPDATE funds SET balance = ? WHERE chat_id = ? AND name = ?`,
-      args: [MONTHLY_ALLOWANCES[STANDARD_FUNDS.DEBT], chatId, STANDARD_FUNDS.DEBT]
-    });
-
-    await db.execute({
-      sql: `INSERT INTO transactions (chat_id, type, amount, description, fund_name, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [
-        chatId,
-        'expense',
-        Math.abs(MONTHLY_ALLOWANCES[STANDARD_FUNDS.DEBT]),
-        `Định mức trả nợ tháng ${monthKey}`,
-        STANDARD_FUNDS.DEBT,
-        Date.now()
-      ]
-    });
-
-    await db.execute({
-      sql: `UPDATE user_finance_state SET last_month_key = ?, updated_at = ? WHERE chat_id = ?`,
-      args: [monthKey, Date.now(), chatId]
-    });
-
-    rolledOverMonth = true;
-  }
-
-  return { rolledOverWeek, rolledOverMonth };
+  return { rolledOverWeek: false, rolledOverMonth: false };
 }
 
-// Kiểm tra rollover cho tất cả các user (dành cho cron job chạy ngầm định kỳ)
+// Kiểm tra rollover cho tất cả các user (đã tắt tự động hồi hạn mức theo tuần)
 async function checkAllUsersWeeklyRollover() {
-  const usersRes = await db.execute(`SELECT chat_id FROM allowed_users`);
-  for (const user of usersRes.rows) {
-    try {
-      await ensureUserFundsAndRollover(user.chat_id);
-    } catch (err) {
-      console.error(`Lỗi rollover cho user ${user.chat_id}:`, err.message);
-    }
-  }
+  // Không tự động can thiệp số dư các quỹ, user chủ động điều chỉnh
 }
 
 // Lấy danh sách 4 quỹ
@@ -614,9 +514,12 @@ async function getOverview(chatId) {
   const debtBalance = debtFund ? Number(debtFund.balance) : 0;
   const savingsBalance = savingsFund ? Number(savingsFund.balance) : 0;
 
+  // Lấy thông tin tuần hiện tại
+  const weekInfo = getCurrentWeekRange();
+  const { startOfWeek, endOfWeek, weekKey } = weekInfo;
+
   // Hạn mức chi tiêu tuần (ưu tiên cài đặt tùy chỉnh trong weekly_budgets, mặc định: 300k Tiêu dùng + 200k Phát sinh = 500k)
   const defaultBudget = WEEKLY_ALLOWANCES[STANDARD_FUNDS.SPENDING] + WEEKLY_ALLOWANCES[STANDARD_FUNDS.EXTRA];
-  const { weekKey } = getCurrentWeekRange();
   const budgetRes = await db.execute({
     sql: `SELECT amount FROM weekly_budgets WHERE chat_id = ? AND (week_key = ? OR week_key = 'default')
           ORDER BY CASE WHEN week_key = ? THEN 1 ELSE 2 END ASC LIMIT 1`,
@@ -635,7 +538,6 @@ async function getOverview(chatId) {
   });
   const spentThisWeek = (spentRes.rows[0] && spentRes.rows[0].total_spent) ? Number(spentRes.rows[0].total_spent) : 0;
 
-  const weekInfo = getCurrentWeekRange();
   const recentTransactions = await getTransactions(chatId, { limit: 30 });
 
   return {
