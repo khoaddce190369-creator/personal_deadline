@@ -346,6 +346,23 @@ async function handleAddTransaction() {
     return;
   }
 
+  const typeLabel = currentTransType === 'income' ? 'Thu nhập (+)' : 'Chi tiêu (-)';
+  const descLabel = description || (currentTransType === 'income' ? 'Thu nhập ' + fundName : 'Chi tiêu ' + fundName);
+  const nowDisplay = dayjs().format('HH:mm DD/MM/YYYY');
+  const timeDisplay = timeStr ? timeStr : `${nowDisplay} (Mặc định thời điểm nhập)`;
+
+  const confirmMsg = `XÁC NHẬN GIAO DỊCH TIỀN BẠC:\n\n`
+                   + `• Phân loại: ${typeLabel}\n`
+                   + `• Số tiền: ${amountStr}\n`
+                   + `• Quỹ: ${fundName}\n`
+                   + `• Nội dung: ${descLabel}\n`
+                   + `• Thời gian: ${timeDisplay}\n\n`
+                   + `Bạn có xác nhận muốn lưu giao dịch này?`;
+
+  if (!confirm(confirmMsg)) {
+    return;
+  }
+
   try {
     const res = await fetch('/api/finance/transactions', {
       method: 'POST',
@@ -355,7 +372,7 @@ async function handleAddTransaction() {
         type: currentTransType,
         amount: amountStr,
         fundName,
-        description: description || (currentTransType === 'income' ? 'Thu nhập ' + fundName : 'Chi tiêu ' + fundName),
+        description: descLabel,
         timeStr: timeStr || undefined
       })
     });
@@ -367,11 +384,20 @@ async function handleAddTransaction() {
       document.getElementById('trans-time-input').value = '';
       loadFinanceOverview();
       loadTransactions(currentFinanceFilter);
+      alert(
+        `ĐÃ LƯU GIAO DỊCH THÀNH CÔNG!\n\n` +
+        `• Phân loại: ${result.type === 'income' ? 'Thu nhập (+)' : 'Chi tiêu (-)'}\n` +
+        `• Số tiền: ${formatMoney(result.amount)}\n` +
+        `• Quỹ: ${result.fund_name} (Số dư mới: ${formatMoney(result.fund_balance)})\n` +
+        `• Nội dung: ${result.description}\n` +
+        `• Thời gian: ${dayjs(result.created_at).format('HH:mm DD/MM/YYYY')}\n` +
+        `• Tổng số tiền: ${formatMoney(result.total_balance)}`
+      );
     } else {
       alert('Lỗi: ' + (result.error || 'Không thể thêm giao dịch'));
     }
   } catch (err) {
-    alert('Lỗi khi thêm giao dịch');
+    alert('Lỗi khi thêm giao dịch: ' + err.message);
   }
 }
 

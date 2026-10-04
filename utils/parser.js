@@ -79,16 +79,23 @@ function normalizeTag(str) {
   return null;
 }
 
-// Phân tích thời gian tương tự như cú pháp deadline (VD: 15/30, 15/30/+1, 15/30/02/10)
+// Phân tích thời gian (hỗ trợ cả dấu / hoặc : hoặc h, VD: 15/30, 15:30, 15h30, 15/30/+1, 15/30/02/10)
 function parseDateTime(timeStr) {
-  if (!timeStr || !timeStr.includes('/')) return null;
+  if (!timeStr || typeof timeStr !== 'string') return null;
 
-  const timeParts = timeStr.trim().split('/');
+  let clean = timeStr.trim();
+  // Chuẩn hóa định dạng "15:30", "15h30", "15h" thành "15/30"
+  clean = clean.replace(/(\d{1,2})h(\d{1,2})?/i, (_, h, m) => `${h}/${m || '00'}`);
+  clean = clean.replace(/(\d{1,2}):(\d{1,2})/, '$1/$2');
+
+  if (!clean.includes('/')) return null;
+
+  const timeParts = clean.split('/').map(p => p.trim()).filter(Boolean);
   if (timeParts.length < 2) return null;
 
   const hour = parseInt(timeParts[0]);
   const minute = parseInt(timeParts[1]);
-  if (isNaN(hour) || isNaN(minute)) return null;
+  if (isNaN(hour) || isNaN(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
 
   let targetDate = dayjs().tz("Asia/Ho_Chi_Minh");
 
@@ -103,7 +110,7 @@ function parseDateTime(timeStr) {
     // giờ/phút/ngày/tháng hoặc giờ/phút/ngày/tháng/năm
     const day = parseInt(timeParts[2]);
     const month = parseInt(timeParts[3]) - 1;
-    const year = timeParts.length === 5 ? parseInt(timeParts[4]) : targetDate.year();
+    const year = timeParts.length >= 5 ? parseInt(timeParts[4]) : targetDate.year();
     targetDate = targetDate.year(year).month(month).date(day).hour(hour).minute(minute).second(0).millisecond(0);
   }
 
@@ -118,7 +125,7 @@ function parseDateTime(timeStr) {
  * 2. Khi không nhập tag nào trong các tag:
  *    - Nếu là '+' -> tự động cộng vào quỹ Tiết kiệm
  *    - Nếu là '-' -> tự động trừ vào quỹ Tiêu dùng
- * 3. Nội dung và Thời gian là tùy chọn.
+ * 3. Nội dung và Thời gian là tùy chọn (nếu không nhập thời gian thì mặc định là thời điểm nhập).
  */
 function parseFinanceMessage(text) {
   if (!text || typeof text !== 'string') return null;
@@ -163,7 +170,8 @@ function parseFinanceMessage(text) {
 
   // 2. Phân tích các phần còn lại để trích xuất Tag, Thời gian, và Nội dung
   let matchedFund = null;
-  let transactionTime = Date.now();
+  let transactionTime = Date.now(); // Mặc định thời điểm nhập nếu không nhập thời gian
+  let hasCustomTime = false;
   let descParts = [];
 
   for (const part of remainingParts) {
@@ -174,10 +182,11 @@ function parseFinanceMessage(text) {
       continue;
     }
 
-    // Ktra có phải là chuỗi thời gian không (VD: 12/00, 15/30/02/10)
+    // Ktra có phải là chuỗi thời gian không (VD: 12/00, 12:00, 15/30/02/10)
     const timeVal = parseDateTime(part);
     if (timeVal !== null) {
       transactionTime = timeVal;
+      hasCustomTime = true;
       continue;
     }
 
@@ -208,7 +217,8 @@ function parseFinanceMessage(text) {
     amount,
     description,
     fundName,
-    transactionTime
+    transactionTime,
+    hasCustomTime
   };
 }
 

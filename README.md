@@ -55,9 +55,10 @@ Xong! Hệ thống của bạn đã chạy 24/7 hoàn toàn tự động và mi�
 ### 2. Cú pháp gửi tin nhắn qua Bot Telegram:
 `+/-số tiền, tag, nội dung(tùy chọn), thời gian(tùy chọn)`
 
-> **Quy tắc khi không ghi tag:**
-> - Nếu dấu **`-`** (chi tiêu): Tự động trừ vào **Quỹ Tiêu dùng**.
-> - Nếu dấu **`+`** (thu nhập): Tự động cộng vào **Quỹ Tiết kiệm**.
+> **Quy tắc khi nhập giao dịch:**
+> - Nếu không ghi tag: Dấu **`-`** (chi tiêu) tự động trừ vào **Quỹ Tiêu dùng**; Dấu **`+`** (thu nhập) tự động cộng vào **Quỹ Tiết kiệm**.
+> - Nếu không nhập thời gian (để trống): Thời gian sẽ là **mặc định ngay tại thời điểm nhập**.
+> - Hệ thống luôn gửi **tin nhắn xác nhận lại toàn bộ thông tin đã nhập** để bạn kiểm tra trước và sau khi lưu giao dịch.
 
 #### Ví dụ:
 - Chi tiêu dùng: `-50k, tiêu dùng, ăn trưa, 12/00`

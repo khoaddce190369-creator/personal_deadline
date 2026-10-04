@@ -139,13 +139,14 @@ bot.on('message', async (msg) => {
 
       const typeLabel = financeData.type === 'income' ? '🟢 Thu nhập (+)' : '🔴 Chi tiêu (-)';
       const timeStr = formatTime(financeData.transactionTime);
+      const timeNote = financeData.hasCustomTime ? '' : ' *(Mặc định thời điểm nhập)*';
 
       const reply = `💰 **XÁC NHẬN GIAO DỊCH TIỀN BẠC**\n\n`
                   + `🏷️ Phân loại: ${typeLabel}\n`
                   + `💵 Số tiền: *${formatMoney(financeData.amount)}*\n`
                   + `🏦 Quỹ: *${financeData.fundName}*\n`
                   + `📝 Nội dung: *${financeData.description}*\n`
-                  + `🕒 Thời gian: *${timeStr}*`;
+                  + `🕒 Thời gian: *${timeStr}*${timeNote}`;
 
       const options = {
         parse_mode: 'Markdown',
