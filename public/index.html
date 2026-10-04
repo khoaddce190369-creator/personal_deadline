@@ -74,7 +74,7 @@
             </div>
             <div>
               <span class="budget-label">Đã chi:</span>
-              <span class="budget-val" id="weekly-spent-display" style="color: var(--danger);">0 đ</span>
+              <span class="budget-val" id="weekly-spent-display" style="color: var(--danger); cursor: pointer;" title="Nhấn để sửa số tiền" onclick="handleEditWeeklySpent()">0 đ</span>
             </div>
             <div>
               <span class="budget-label">Còn lại:</span>
@@ -82,9 +82,9 @@
             </div>
           </div>
 
-          <!-- Progress Bar Chi Tiêu Tuần -->
-          <div class="progress-bar-container">
-            <div class="progress-bar-fill" id="budget-progress-bar" style="width: 0%;"></div>
+          <!-- Thanh kéo chi tiêu tuần (Kéo để điều chỉnh chi tiêu thực tế) -->
+          <div class="slider-wrapper">
+            <input type="range" id="budget-progress-slider" min="0" max="500000" step="5000" value="0" class="progress-slider">
           </div>
           <div class="progress-info" id="budget-progress-text"></div>
         </div>

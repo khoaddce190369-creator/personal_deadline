@@ -108,6 +108,19 @@ app.post('/api/finance/weekly-budget', async (req, res) => {
   }
 });
 
+// Cài đặt / Điều chỉnh số tiền đã chi tiêu trong tuần (kéo thanh tiến độ tuần)
+app.post('/api/finance/weekly-spent', async (req, res) => {
+  try {
+    const { chatId, spent } = req.body;
+    if (!chatId) return res.status(401).json({ error: 'Missing chatId' });
+
+    const result = await financeService.setWeeklySpent(chatId, spent);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Lấy danh sách các quỹ
 app.get('/api/finance/funds', async (req, res) => {
   try {

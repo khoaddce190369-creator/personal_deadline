@@ -189,32 +189,12 @@ async function loadFinanceOverview() {
       document.getElementById('week-label-display').textContent = data.weekInfo.label;
     }
     document.getElementById('weekly-budget-display').textContent = formatMoney(data.weeklyBudget);
-    document.getElementById('weekly-spent-display').textContent = formatMoney(data.spentThisWeek);
 
-    const remainingEl = document.getElementById('weekly-remaining-display');
-    const progressBar = document.getElementById('budget-progress-bar');
-    const progressText = document.getElementById('budget-progress-text');
-
-    remainingEl.textContent = formatMoney(data.remainingWeek);
-    if (data.remainingWeek < 0) {
-      remainingEl.style.color = 'var(--danger)';
-    } else {
-      remainingEl.style.color = 'var(--accent)';
+    // Cập nhật thanh trượt chi tiêu và các chỉ số (nếu người dùng không đang trực tiếp kéo)
+    if (!isDraggingSlider) {
+      updateProgressSliderUI(data.spentThisWeek, data.weeklyBudget);
     }
-
-    const percentage = Math.min(100, Math.round((data.spentThisWeek / (data.weeklyBudget || 1)) * 100));
-    progressBar.style.width = `${percentage}%`;
-    progressBar.className = 'progress-bar-fill';
-
-    if (percentage >= 100 || data.remainingWeek < 0) {
-      progressBar.classList.add('danger');
-      progressText.innerHTML = `<strong style="color: var(--danger)">Vượt hạn mức (${percentage}%)</strong>`;
-    } else if (percentage >= 75) {
-      progressBar.classList.add('warning');
-      progressText.innerHTML = `<span style="color: var(--warning)">Đã chi ${percentage}% (${formatMoney(data.spentThisWeek)} / ${formatMoney(data.weeklyBudget)})</span>`;
-    } else {
-      progressText.textContent = `Đã chi ${percentage}% (${formatMoney(data.spentThisWeek)} / ${formatMoney(data.weeklyBudget)})`;
-    }
+    initProgressSliderEvents();
 
     // 3. Render danh sách 4 Quỹ chuẩn (kèm chức năng chỉnh sửa số tiền)
     renderFunds(data.funds);
@@ -222,6 +202,105 @@ async function loadFinanceOverview() {
   } catch (err) {
     console.error('Lỗi khi tải tổng quan tài chính:', err);
   }
+}
+
+let isDraggingSlider = false;
+
+// Cập nhật giao diện thanh trượt chi tiêu tuần
+function updateProgressSliderUI(spentVal, budgetVal) {
+  const slider = document.getElementById('budget-progress-slider');
+  if (!slider) return;
+
+  const budget = budgetVal || (overviewData ? overviewData.weeklyBudget : 500000) || 500000;
+  const spent = spentVal !== undefined ? Number(spentVal) : (overviewData ? overviewData.spentThisWeek : 0);
+  const remaining = budget - spent;
+
+  const maxVal = Math.max(budget, spent);
+  slider.max = maxVal;
+  slider.step = 5000;
+  slider.value = spent;
+
+  const percentage = Math.round((spent / (budget || 1)) * 100);
+  const fillPercent = Math.min(100, Math.max(0, Math.round((spent / (maxVal || 1)) * 100)));
+
+  let fillColor = 'var(--accent)';
+  if (percentage >= 100 || remaining < 0) {
+    fillColor = 'var(--danger)';
+  } else if (percentage >= 75) {
+    fillColor = 'var(--warning)';
+  }
+
+  slider.style.background = `linear-gradient(to right, ${fillColor} 0%, ${fillColor} ${fillPercent}%, #1a1a1a ${fillPercent}%, #1a1a1a 100%)`;
+
+  document.getElementById('weekly-spent-display').textContent = formatMoney(spent);
+  const remainingEl = document.getElementById('weekly-remaining-display');
+  remainingEl.textContent = formatMoney(remaining);
+  if (remaining < 0) {
+    remainingEl.style.color = 'var(--danger)';
+  } else {
+    remainingEl.style.color = 'var(--accent)';
+  }
+
+  const progressText = document.getElementById('budget-progress-text');
+  if (progressText) {
+    if (percentage >= 100 || remaining < 0) {
+      progressText.innerHTML = `<strong style="color: var(--danger)">Vượt hạn mức (${percentage}%)</strong>`;
+    } else if (percentage >= 75) {
+      progressText.innerHTML = `<span style="color: var(--warning)">Đã chi ${percentage}% (${formatMoney(spent)} / ${formatMoney(budget)})</span>`;
+    } else {
+      progressText.textContent = `Đã chi ${percentage}% (${formatMoney(spent)} / ${formatMoney(budget)})`;
+    }
+  }
+}
+
+// Khởi tạo sự kiện kéo thả cho thanh trượt
+function initProgressSliderEvents() {
+  const slider = document.getElementById('budget-progress-slider');
+  if (!slider || slider.dataset.initialized) return;
+  slider.dataset.initialized = 'true';
+
+  slider.addEventListener('input', (e) => {
+    isDraggingSlider = true;
+    const spentVal = Number(e.target.value);
+    const budgetVal = overviewData ? overviewData.weeklyBudget : 500000;
+    updateProgressSliderUI(spentVal, budgetVal);
+  });
+
+  slider.addEventListener('change', async (e) => {
+    isDraggingSlider = false;
+    const spentVal = Number(e.target.value);
+    await saveWeeklySpent(spentVal);
+  });
+}
+
+// Lưu số tiền đã chi tuần lên server
+async function saveWeeklySpent(amountVal) {
+  try {
+    const res = await fetch('/api/finance/weekly-spent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId: myChatId, spent: amountVal })
+    });
+    const result = await res.json();
+    if (result.success) {
+      if (result.overview) {
+        overviewData = result.overview;
+      }
+      loadFinanceOverview();
+    } else {
+      alert('Lỗi: ' + (result.error || 'Không thể lưu chi tiêu'));
+    }
+  } catch (err) {
+    alert('Lỗi kết nối khi lưu chi tiêu tuần: ' + err.message);
+  }
+}
+
+// Chỉnh sửa số tiền đã chi bằng cách nhập số trực tiếp
+async function handleEditWeeklySpent() {
+  const currentSpent = overviewData ? overviewData.spentThisWeek : 0;
+  const input = prompt('Nhập số tiền đã chi tuần này (VD: 200k, 250k):', currentSpent);
+  if (input === null || input.trim() === '') return;
+  await saveWeeklySpent(input.trim());
 }
 
 // Chỉnh sửa hạn mức chi tiêu tuần trực tiếp qua Web

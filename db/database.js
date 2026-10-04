@@ -65,12 +65,18 @@ async function initDb() {
         chat_id TEXT NOT NULL,
         week_key TEXT NOT NULL, -- vd: '2026-W40' hoặc 'default'
         amount REAL NOT NULL,
+        spent_override REAL,
         created_at INTEGER
       )
     `);
     await db.execute(`
       CREATE UNIQUE INDEX IF NOT EXISTS idx_budgets_chat_week ON weekly_budgets (chat_id, week_key)
     `);
+    try {
+      await db.execute(`ALTER TABLE weekly_budgets ADD COLUMN spent_override REAL`);
+    } catch (_) {
+      // Đã có cột spent_override
+    }
 
     // Bảng lưu trạng thái chu kỳ tuần và tháng, cùng tổng số tiền thực tế của user
     await db.execute(`
