@@ -110,6 +110,16 @@ async function initDb() {
     } catch (_) {
       // Đã có cột total_money
     }
+    try {
+      await db.execute(`ALTER TABLE user_finance_state ADD COLUMN last_progress_reset_at INTEGER`);
+    } catch (_) {
+      // Đã có cột last_progress_reset_at
+    }
+    try {
+      await db.execute(`ALTER TABLE user_finance_state ADD COLUMN last_weekly_report_week TEXT`);
+    } catch (_) {
+      // Đã có cột last_weekly_report_week
+    }
     
     // Đảm bảo Admin luôn được phép dùng bot mà không cần mã mời
     if (config.adminChatId) {

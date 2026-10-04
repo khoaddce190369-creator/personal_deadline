@@ -64,8 +64,12 @@
         <!-- Hạn mức chi tiêu tuần -->
         <div class="stat-card">
           <div class="stat-header-row">
-            <div class="stat-title">TIẾN ĐỘ TUẦN (<span id="week-label-display">Hiện tại</span>)</div>
-            <button class="btn-small" onclick="handleEditWeeklyBudget()">Sửa hạn mức</button>
+            <div class="stat-title">TIẾN ĐỘ TUẦN</div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button class="btn-small" onclick="handleOpenWeeklyReport()">Báo cáo tuần</button>
+              <button class="btn-small" onclick="handleEditWeeklyBudget()">Sửa hạn mức</button>
+              <button class="btn-small" style="color: var(--warning); border-color: var(--warning);" onclick="handleResetWeeklyProgress()">Reset tiến độ</button>
+            </div>
           </div>
           <div class="budget-stat-row">
             <div>
@@ -178,6 +182,61 @@
       <div class="modal-footer">
         <button type="button" class="btn-del" onclick="closeModal()">HỦY</button>
         <button type="button" class="btn-main" id="modal-submit-btn" onclick="submitModal()">LƯU</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Báo cáo Tổng kết Tuần (T2 - CN) -->
+  <div id="report-modal-overlay" class="modal-overlay" style="display: none;" onclick="handleReportOverlayClick(event)">
+    <div class="modal-box report-modal-box">
+      <div class="modal-header">
+        <h3 id="report-modal-title">BÁO CÁO TỔNG KẾT TUẦN</h3>
+        <button type="button" class="modal-close-btn" onclick="closeReportModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="tabs report-tabs">
+          <button type="button" class="tab-btn active" id="tab-report-prev" onclick="loadWeeklyReport(-1)">Tuần vừa qua (Đã xong)</button>
+          <button type="button" class="tab-btn" id="tab-report-curr" onclick="loadWeeklyReport(0)">Tuần này</button>
+        </div>
+        <div id="report-time-range" class="report-time-range">Chu kỳ: Thứ Hai - Chủ Nhật</div>
+
+        <div class="report-stats-grid">
+          <div class="report-stat-card">
+            <div class="report-stat-header">ĐÃ XÀI (TIÊU DÙNG & PHÁT SINH)</div>
+            <div class="report-stat-value danger" id="report-spent-total">0 đ</div>
+            <div class="report-stat-details">
+              <div>Tiêu dùng: <span id="report-spent-spending" style="color: var(--danger); font-weight: bold;">0 đ</span></div>
+              <div>Phát sinh: <span id="report-spent-extra" style="color: var(--danger); font-weight: bold;">0 đ</span></div>
+            </div>
+          </div>
+
+          <div class="report-stat-card">
+            <div class="report-stat-header">THU NHẬP ĐƯỢC (TIẾT KIỆM)</div>
+            <div class="report-stat-value success" id="report-income-savings">0 đ</div>
+            <div class="report-stat-details">
+              <div>Quỹ Tiết kiệm</div>
+            </div>
+          </div>
+
+          <div class="report-stat-card">
+            <div class="report-stat-header">TRẢ NỢ ĐƯỢC (TRẢ NỢ)</div>
+            <div class="report-stat-value accent" id="report-debt-paid">0 đ</div>
+            <div class="report-stat-details">
+              <div>Quỹ Trả nợ</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="report-transactions-section">
+          <div class="report-tx-header">GIAO DỊCH TRONG TUẦN</div>
+          <div id="report-transactions-list" class="report-tx-list">
+            <!-- Danh sách giao dịch trong tuần -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: space-between;">
+        <button type="button" class="btn-small" style="color: var(--warning); border-color: var(--warning);" onclick="handleResetWeeklyProgress()">Reset tiến độ tuần</button>
+        <button type="button" class="btn-main" onclick="closeReportModal()">ĐÓNG</button>
       </div>
     </div>
   </div>

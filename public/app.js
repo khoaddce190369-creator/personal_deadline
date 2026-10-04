@@ -185,8 +185,9 @@ async function loadFinanceOverview() {
     document.getElementById('total-balance-display').textContent = formatMoney(data.totalBalance);
 
     // 2. Cập nhật Thống kê Tuần
-    if (data.weekInfo && data.weekInfo.label) {
-      document.getElementById('week-label-display').textContent = data.weekInfo.label;
+    const weekLabelEl = document.getElementById('week-label-display');
+    if (weekLabelEl && data.weekInfo && data.weekInfo.label) {
+      weekLabelEl.textContent = data.weekInfo.label;
     }
     document.getElementById('weekly-budget-display').textContent = formatMoney(data.weeklyBudget);
 
@@ -702,15 +703,143 @@ function showToast(message, isError = false) {
 // Bắt phím Enter / Escape trong Modal
 window.addEventListener('keydown', (e) => {
   const overlay = document.getElementById('modal-overlay');
-  if (!overlay || overlay.style.display === 'none') return;
+  const reportOverlay = document.getElementById('report-modal-overlay');
 
   if (e.key === 'Escape') {
-    closeModal();
+    if (overlay && overlay.style.display !== 'none') closeModal();
+    if (reportOverlay && reportOverlay.style.display !== 'none') closeReportModal();
   } else if (e.key === 'Enter') {
-    const inputEl = document.getElementById('modal-input');
-    if (document.activeElement === inputEl) {
-      e.preventDefault();
-      submitModal();
+    if (overlay && overlay.style.display !== 'none') {
+      const inputEl = document.getElementById('modal-input');
+      if (document.activeElement === inputEl) {
+        e.preventDefault();
+        submitModal();
+      }
     }
   }
 });
+
+// ================= BÁO CÁO TỔNG KẾT TUẦN & RESET TIẾN ĐỘ =================
+
+let currentReportOffset = -1; // -1: tuần vừa qua (đã xong); 0: tuần này
+
+// Mở Modal Báo cáo Tổng kết Tuần
+function handleOpenWeeklyReport() {
+  const overlay = document.getElementById('report-modal-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  loadWeeklyReport(-1); // Mặc định xem tuần vừa qua (đã hoàn thành)
+}
+
+function closeReportModal() {
+  const overlay = document.getElementById('report-modal-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function handleReportOverlayClick(e) {
+  if (e.target && e.target.id === 'report-modal-overlay') {
+    closeReportModal();
+  }
+}
+
+// Tải dữ liệu báo cáo tuần
+async function loadWeeklyReport(offset = -1) {
+  if (!myChatId) return;
+  currentReportOffset = offset;
+
+  // Cập nhật tab active
+  const tabPrev = document.getElementById('tab-report-prev');
+  const tabCurr = document.getElementById('tab-report-curr');
+  if (tabPrev && tabCurr) {
+    if (offset === -1) {
+      tabPrev.classList.add('active');
+      tabCurr.classList.remove('active');
+    } else {
+      tabPrev.classList.remove('active');
+      tabCurr.classList.add('active');
+    }
+  }
+
+  const timeRangeEl = document.getElementById('report-time-range');
+  const spentTotalEl = document.getElementById('report-spent-total');
+  const spentSpendingEl = document.getElementById('report-spent-spending');
+  const spentExtraEl = document.getElementById('report-spent-extra');
+  const incomeSavingsEl = document.getElementById('report-income-savings');
+  const debtPaidEl = document.getElementById('report-debt-paid');
+  const txListEl = document.getElementById('report-transactions-list');
+
+  try {
+    const res = await fetch(`/api/finance/weekly-report?chatId=${myChatId}&offset=${offset}`);
+    const data = await res.json();
+
+    if (!data.success) {
+      showToast('Lỗi khi tải báo cáo tuần: ' + (data.error || 'Thất bại'), true);
+      return;
+    }
+
+    if (timeRangeEl) {
+      timeRangeEl.textContent = `Chu kỳ: Thứ Hai - Chủ Nhật (${data.startDateStr} - ${data.endDateStr})`;
+    }
+
+    if (spentTotalEl) spentTotalEl.textContent = formatMoney(data.totalSpent);
+    if (spentSpendingEl) spentSpendingEl.textContent = formatMoney(data.spendingSpent);
+    if (spentExtraEl) spentExtraEl.textContent = formatMoney(data.extraSpent);
+    if (incomeSavingsEl) incomeSavingsEl.textContent = formatMoney(data.savingsIncome);
+    if (debtPaidEl) debtPaidEl.textContent = formatMoney(data.debtPaid);
+
+    if (txListEl) {
+      txListEl.innerHTML = '';
+      if (!Array.isArray(data.transactions) || data.transactions.length === 0) {
+        txListEl.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 12px; font-size: 12px;">Không có giao dịch trong tuần này.</div>`;
+      } else {
+        data.transactions.forEach(tx => {
+          const isExpense = tx.type === 'expense';
+          const timeStr = dayjs(tx.created_at).format('HH:mm DD/MM');
+          const row = document.createElement('div');
+          row.className = 'report-tx-item';
+          row.innerHTML = `
+            <div>
+              <div class="tx-desc">${escapeHtml(tx.description)}</div>
+              <div class="tx-sub">[${escapeHtml(tx.fund_name)}] ${timeStr}</div>
+            </div>
+            <div class="tx-amount ${tx.type}">
+              ${isExpense ? '-' : '+'}${formatMoney(tx.amount)}
+            </div>
+          `;
+          txListEl.appendChild(row);
+        });
+      }
+    }
+  } catch (err) {
+    showToast('Lỗi kết nối khi tải báo cáo: ' + err.message, true);
+  }
+}
+
+// Reset tiến độ tuần thủ công
+async function handleResetWeeklyProgress() {
+  if (!confirm('Xác nhận reset tiến độ tuần về 0 đ?\n(Các quỹ và tổng số tiền của bạn sẽ không bị ảnh hưởng)')) {
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/finance/weekly-reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId: myChatId })
+    });
+    const result = await res.json();
+    if (result.success) {
+      showToast('Đã reset tiến độ tuần về 0 đ!');
+      if (result.overview) {
+        overviewData = result.overview;
+      }
+      loadFinanceOverview();
+      loadTransactions(currentFinanceFilter);
+      closeReportModal();
+    } else {
+      showToast('Lỗi khi reset tiến độ: ' + (result.error || 'Thất bại'), true);
+    }
+  } catch (err) {
+    showToast('Lỗi kết nối khi reset tiến độ: ' + err.message, true);
+  }
+}

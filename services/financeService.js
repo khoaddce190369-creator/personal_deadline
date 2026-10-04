@@ -23,12 +23,14 @@ const MONTHLY_ALLOWANCES = {
   [STANDARD_FUNDS.DEBT]: -700000     // -700k / tháng
 };
 
-// Lấy thông tin tuần hiện tại (Thứ Hai 00:00:00 -> Chủ Nhật 23:59:59.999 theo múi giờ VN)
-function getCurrentWeekRange() {
+// Lấy thông tin tuần (Thứ Hai 00:00:00 -> Chủ Nhật 23:59:59.999 theo múi giờ VN)
+// offset = 0: tuần này; offset = -1: tuần trước (đã hoàn thành)
+function getCurrentWeekRange(offset = 0) {
   const now = dayjs().tz('Asia/Ho_Chi_Minh');
-  const dayOfWeek = now.day(); // 0 is Sunday, 1 is Monday...
+  const target = now.add(offset * 7, 'day');
+  const dayOfWeek = target.day(); // 0 is Sunday, 1 is Monday...
   const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const startOfWeek = now.add(diffToMonday, 'day').startOf('day');
+  const startOfWeek = target.add(diffToMonday, 'day').startOf('day');
   const endOfWeek = startOfWeek.add(6, 'day').endOf('day');
   
   // Format week key: YYYY-Www (vd: 2026-W40)
@@ -39,6 +41,8 @@ function getCurrentWeekRange() {
     startOfWeek: startOfWeek.valueOf(),
     endOfWeek: endOfWeek.valueOf(),
     weekKey,
+    startDateStr: startOfWeek.format('DD/MM/YYYY'),
+    endDateStr: endOfWeek.format('DD/MM/YYYY'),
     label: `${startOfWeek.format('DD/MM')} - ${endOfWeek.format('DD/MM/YYYY')}`
   };
 }
@@ -257,41 +261,49 @@ function calculateTotalMoneyImpact(fundName, fundDelta) {
   return fundDelta;
 }
 
-// Lấy số tiền đã chi tuần hiện tại
+// Lấy số tiền đã chi tuần hiện tại (không tự động reset theo tuần lịch, duy trì cho đến khi user tự reset)
 async function getWeeklySpent(chatId) {
-  const { startOfWeek, endOfWeek, weekKey } = getCurrentWeekRange();
+  const { startOfWeek, weekKey } = getCurrentWeekRange();
   const budgetRes = await db.execute({
-    sql: `SELECT amount, spent_override FROM weekly_budgets WHERE chat_id = ? AND (week_key = ? OR week_key = 'default')
-          ORDER BY CASE WHEN week_key = ? THEN 1 ELSE 2 END ASC LIMIT 1`,
+    sql: `SELECT amount, spent_override FROM weekly_budgets WHERE chat_id = ? AND (week_key = 'current' OR week_key = ? OR week_key = 'default')
+          ORDER BY CASE WHEN week_key = 'current' THEN 1 WHEN week_key = ? THEN 2 ELSE 3 END ASC LIMIT 1`,
     args: [chatId, weekKey, weekKey]
   });
   const budgetRow = budgetRes.rows[0];
   if (budgetRow && budgetRow.spent_override !== null && budgetRow.spent_override !== undefined) {
-    return Number(budgetRow.spent_override);
+    return Math.max(0, Number(budgetRow.spent_override));
   }
+
+  // Nếu chưa có spent_override, kiểm tra thời điểm reset gần nhất
+  const stateRes = await db.execute({
+    sql: `SELECT last_progress_reset_at FROM user_finance_state WHERE chat_id = ?`,
+    args: [chatId]
+  });
+  const resetAt = stateRes.rows[0] ? stateRes.rows[0].last_progress_reset_at : null;
+  const filterFrom = resetAt ? Number(resetAt) : startOfWeek;
+
   const spentRes = await db.execute({
     sql: `SELECT 
             COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE -amount END), 0) as total_spent 
           FROM transactions 
           WHERE chat_id = ? 
             AND fund_name IN ('Tiêu dùng', 'Phát sinh')
-            AND created_at >= ? AND created_at <= ?`,
-    args: [chatId, startOfWeek, endOfWeek]
+            AND created_at >= ?`,
+    args: [chatId, filterFrom]
   });
   return Math.max(0, Number(spentRes.rows[0] ? spentRes.rows[0].total_spent : 0));
 }
 
-// Lưu số tiền đã chi tuần vào bảng weekly_budgets
+// Lưu số tiền đã chi tuần vào bảng weekly_budgets (khóa cố định 'current' để không tự reset khi sang tuần mới)
 async function saveWeeklySpentRecord(chatId, newSpent) {
-  const { weekKey } = getCurrentWeekRange();
   const defaultBudget = WEEKLY_ALLOWANCES[STANDARD_FUNDS.SPENDING] + WEEKLY_ALLOWANCES[STANDARD_FUNDS.EXTRA];
   const spent = Math.max(0, Math.round(Number(newSpent) || 0));
 
   await db.execute({
     sql: `INSERT INTO weekly_budgets (chat_id, week_key, amount, spent_override, created_at)
-          VALUES (?, ?, ?, ?, ?)
+          VALUES (?, 'current', ?, ?, ?)
           ON CONFLICT(chat_id, week_key) DO UPDATE SET spent_override = excluded.spent_override, created_at = excluded.created_at`,
-    args: [chatId, weekKey, defaultBudget, spent, Date.now()]
+    args: [chatId, defaultBudget, spent, Date.now()]
   });
   return spent;
 }
@@ -333,17 +345,9 @@ async function updateFundBalance(chatId, fundIdentifier, newBalanceStr) {
 
   // Quỹ Tiêu dùng hoặc Phát sinh giảm bao nhiêu thì thanh tiến độ tăng bấy nhiêu, quỹ tăng bao nhiêu thì tiến độ giảm bấy nhiêu
   if (fund.name === STANDARD_FUNDS.SPENDING || fund.name === STANDARD_FUNDS.EXTRA) {
-    const { weekKey } = getCurrentWeekRange();
-    const budgetRes = await db.execute({
-      sql: `SELECT spent_override FROM weekly_budgets WHERE chat_id = ? AND week_key = ?`,
-      args: [chatId, weekKey]
-    });
-    const budgetRow = budgetRes.rows[0];
-    if (budgetRow && budgetRow.spent_override !== null && budgetRow.spent_override !== undefined) {
-      const currentOverride = Number(budgetRow.spent_override);
-      const newOverride = Math.max(0, currentOverride - delta);
-      await saveWeeklySpentRecord(chatId, newOverride);
-    }
+    const currentSpent = await getWeeklySpent(chatId);
+    const newSpent = Math.max(0, currentSpent - delta);
+    await saveWeeklySpentRecord(chatId, newSpent);
   }
 
   // Ghi lại vết giao dịch điều chỉnh
@@ -417,7 +421,13 @@ async function setWeeklyBudget(chatId, amountStr) {
 
   const { weekKey } = getCurrentWeekRange();
 
-  // Lưu hạn mức tuần vào bảng weekly_budgets
+  // Lưu hạn mức tuần vào cả key 'current' và key tuần lịch
+  await db.execute({
+    sql: `INSERT INTO weekly_budgets (chat_id, week_key, amount, created_at)
+          VALUES (?, 'current', ?, ?)
+          ON CONFLICT(chat_id, week_key) DO UPDATE SET amount = excluded.amount, created_at = excluded.created_at`,
+    args: [chatId, amount, Date.now()]
+  });
   await db.execute({
     sql: `INSERT INTO weekly_budgets (chat_id, week_key, amount, created_at)
           VALUES (?, ?, ?, ?)
@@ -495,6 +505,106 @@ async function setWeeklySpent(chatId, spentStr) {
   };
 }
 
+// Reset tiến độ tuần thủ công (user tự tay reset khi kết thúc tuần)
+async function resetWeeklyProgress(chatId) {
+  await ensureUserFundsAndRollover(chatId);
+  const now = Date.now();
+  const defaultBudget = WEEKLY_ALLOWANCES[STANDARD_FUNDS.SPENDING] + WEEKLY_ALLOWANCES[STANDARD_FUNDS.EXTRA];
+
+  // Đặt lại spent_override = 0 cho key 'current'
+  await db.execute({
+    sql: `INSERT INTO weekly_budgets (chat_id, week_key, amount, spent_override, created_at)
+          VALUES (?, 'current', ?, 0, ?)
+          ON CONFLICT(chat_id, week_key) DO UPDATE SET spent_override = 0, created_at = excluded.created_at`,
+    args: [chatId, defaultBudget, now]
+  });
+
+  // Cập nhật thời điểm reset gần nhất
+  await db.execute({
+    sql: `UPDATE user_finance_state SET last_progress_reset_at = ?, updated_at = ? WHERE chat_id = ?`,
+    args: [now, now, chatId]
+  });
+
+  const overview = await getOverview(chatId);
+  return {
+    success: true,
+    spentThisWeek: 0,
+    overview
+  };
+}
+
+// Lấy báo cáo tổng kết tuần (chu kỳ Thứ Hai -> Chủ Nhật)
+// weekOffset = 0: tuần này; weekOffset = -1: tuần trước (đã hoàn thành)
+async function getWeeklyReport(chatId, weekOffset = 0) {
+  await ensureUserFundsAndRollover(chatId);
+  const weekRange = getCurrentWeekRange(weekOffset);
+  const { startOfWeek, endOfWeek, label, startDateStr, endDateStr, weekKey } = weekRange;
+
+  const res = await db.execute({
+    sql: `SELECT 
+            fund_name,
+            type,
+            COALESCE(SUM(amount), 0) as total_amount,
+            COUNT(*) as count
+          FROM transactions
+          WHERE chat_id = ?
+            AND created_at >= ? AND created_at <= ?
+          GROUP BY fund_name, type`,
+    args: [chatId, startOfWeek, endOfWeek]
+  });
+
+  let spendingSpent = 0;
+  let extraSpent = 0;
+  let savingsIncome = 0;
+  let debtPaid = 0;
+
+  for (const row of res.rows) {
+    const amt = Number(row.total_amount) || 0;
+    if (row.fund_name === STANDARD_FUNDS.SPENDING) {
+      if (row.type === 'expense') spendingSpent += amt;
+      else spendingSpent -= amt;
+    } else if (row.fund_name === STANDARD_FUNDS.EXTRA) {
+      if (row.type === 'expense') extraSpent += amt;
+      else extraSpent -= amt;
+    } else if (row.fund_name === STANDARD_FUNDS.SAVINGS) {
+      if (row.type === 'income') savingsIncome += amt;
+      else savingsIncome -= amt;
+    } else if (row.fund_name === STANDARD_FUNDS.DEBT) {
+      if (row.type === 'income') debtPaid += amt;
+      else debtPaid -= amt;
+    }
+  }
+
+  spendingSpent = Math.max(0, spendingSpent);
+  extraSpent = Math.max(0, extraSpent);
+  const totalSpent = spendingSpent + extraSpent;
+  savingsIncome = Math.max(0, savingsIncome);
+  debtPaid = Math.max(0, debtPaid);
+
+  // Chi tiết các giao dịch trong tuần (tối đa 50)
+  const txRes = await db.execute({
+    sql: `SELECT * FROM transactions 
+          WHERE chat_id = ? AND created_at >= ? AND created_at <= ?
+          ORDER BY created_at DESC LIMIT 50`,
+    args: [chatId, startOfWeek, endOfWeek]
+  });
+
+  return {
+    weekRange,
+    weekOffset,
+    label,
+    startDateStr,
+    endDateStr,
+    weekKey,
+    spendingSpent,
+    extraSpent,
+    totalSpent,
+    savingsIncome,
+    debtPaid,
+    transactions: txRes.rows
+  };
+}
+
 // Thêm một giao dịch (Thu / Chi)
 async function addTransaction(chatId, { type, amount, description, fundName, transactionTime }) {
   await ensureUserFundsAndRollover(chatId);
@@ -550,21 +660,13 @@ async function addTransaction(chatId, { type, amount, description, fundName, tra
   });
   const newFundBalance = updatedFundRes.rows[0] ? Number(updatedFundRes.rows[0].balance) : 0;
 
-  // Cập nhật số tiền đã chi tuần (nếu user đang có override thủ công)
+  // Cập nhật số tiền đã chi tuần (tiến độ chi tiêu tuần)
   if (targetFundName === STANDARD_FUNDS.SPENDING || targetFundName === STANDARD_FUNDS.EXTRA) {
-    const { weekKey } = getCurrentWeekRange();
-    const budgetRes = await db.execute({
-      sql: `SELECT spent_override FROM weekly_budgets WHERE chat_id = ? AND week_key = ?`,
-      args: [chatId, weekKey]
-    });
-    const budgetRow = budgetRes.rows[0];
-    if (budgetRow && budgetRow.spent_override !== null && budgetRow.spent_override !== undefined) {
-      const currentOverride = Number(budgetRow.spent_override);
-      const newOverride = transType === 'expense'
-        ? currentOverride + parsedAmt
-        : Math.max(0, currentOverride - parsedAmt);
-      await saveWeeklySpentRecord(chatId, newOverride);
-    }
+    const currentSpent = await getWeeklySpent(chatId);
+    const newSpent = transType === 'expense'
+      ? currentSpent + parsedAmt
+      : Math.max(0, currentSpent - parsedAmt);
+    await saveWeeklySpentRecord(chatId, newSpent);
   }
 
   // Lấy tổng quan sau khi thêm giao dịch
@@ -613,21 +715,13 @@ async function deleteTransaction(chatId, transactionId) {
     });
   }
 
-  // Cập nhật lại số tiền đã chi tuần (nếu user đang có override thủ công)
+  // Cập nhật lại số tiền đã chi tuần (tiến độ chi tiêu tuần)
   if (tx.fund_name === STANDARD_FUNDS.SPENDING || tx.fund_name === STANDARD_FUNDS.EXTRA) {
-    const { weekKey } = getCurrentWeekRange();
-    const budgetRes = await db.execute({
-      sql: `SELECT spent_override FROM weekly_budgets WHERE chat_id = ? AND week_key = ?`,
-      args: [chatId, weekKey]
-    });
-    const budgetRow = budgetRes.rows[0];
-    if (budgetRow && budgetRow.spent_override !== null && budgetRow.spent_override !== undefined) {
-      const currentOverride = Number(budgetRow.spent_override);
-      const newOverride = tx.type === 'expense'
-        ? Math.max(0, currentOverride - tx.amount)
-        : currentOverride + tx.amount;
-      await saveWeeklySpentRecord(chatId, newOverride);
-    }
+    const currentSpent = await getWeeklySpent(chatId);
+    const newSpent = tx.type === 'expense'
+      ? Math.max(0, currentSpent - tx.amount)
+      : currentSpent + tx.amount;
+    await saveWeeklySpentRecord(chatId, newSpent);
   }
 
   // Xóa giao dịch
@@ -688,26 +782,26 @@ async function getOverview(chatId) {
             END ASC`,
       args: [chatId]
     },
-    // 1: Tổng số tiền thực tế
+    // 1: Tổng số tiền thực tế & thời điểm reset
     {
-      sql: `SELECT total_money FROM user_finance_state WHERE chat_id = ?`,
+      sql: `SELECT total_money, last_progress_reset_at FROM user_finance_state WHERE chat_id = ?`,
       args: [chatId]
     },
-    // 2: Hạn mức tuần & spent_override
+    // 2: Hạn mức tuần & spent_override (ưu tiên week_key = 'current')
     {
-      sql: `SELECT amount, spent_override FROM weekly_budgets WHERE chat_id = ? AND (week_key = ? OR week_key = 'default')
-            ORDER BY CASE WHEN week_key = ? THEN 1 ELSE 2 END ASC LIMIT 1`,
+      sql: `SELECT amount, spent_override FROM weekly_budgets WHERE chat_id = ? AND (week_key = 'current' OR week_key = ? OR week_key = 'default')
+            ORDER BY CASE WHEN week_key = 'current' THEN 1 WHEN week_key = ? THEN 2 ELSE 3 END ASC LIMIT 1`,
       args: [chatId, weekKey, weekKey]
     },
-    // 3: Tổng chi tiêu tính từ giao dịch
+    // 3: Tổng chi tiêu tính từ giao dịch (dự phòng)
     {
       sql: `SELECT 
               COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE -amount END), 0) as total_spent 
             FROM transactions 
             WHERE chat_id = ? 
               AND fund_name IN ('Tiêu dùng', 'Phát sinh')
-              AND created_at >= ? AND created_at <= ?`,
-      args: [chatId, startOfWeek, endOfWeek]
+              AND created_at >= ?`,
+      args: [chatId, startOfWeek]
     },
     // 4: Lịch sử giao dịch gần nhất (30 dòng)
     {
@@ -717,13 +811,14 @@ async function getOverview(chatId) {
   ]);
 
   const funds = batchRes[0].rows;
-  const totalBalance = batchRes[1].rows[0] ? Number(batchRes[1].rows[0].total_money || 0) : 0;
+  const userState = batchRes[1].rows[0];
+  const totalBalance = userState ? Number(userState.total_money || 0) : 0;
   const budgetRow = batchRes[2].rows[0];
   const weeklyBudget = (budgetRow && budgetRow.amount) ? Number(budgetRow.amount) : defaultBudget;
 
   let spentThisWeek = 0;
   if (budgetRow && budgetRow.spent_override !== null && budgetRow.spent_override !== undefined) {
-    spentThisWeek = Number(budgetRow.spent_override);
+    spentThisWeek = Math.max(0, Number(budgetRow.spent_override));
   } else {
     spentThisWeek = Math.max(0, Number(batchRes[3].rows[0] ? batchRes[3].rows[0].total_spent : 0));
   }
@@ -767,6 +862,8 @@ module.exports = {
   updateTotalMoney,
   setWeeklyBudget,
   setWeeklySpent,
+  resetWeeklyProgress,
+  getWeeklyReport,
   addTransaction,
   deleteTransaction,
   getTransactions,

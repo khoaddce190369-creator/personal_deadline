@@ -124,6 +124,33 @@ app.post('/api/finance/weekly-spent', async (req, res) => {
   }
 });
 
+// Lấy báo cáo tổng kết tuần (chu kỳ Thứ Hai -> Chủ Nhật: Tiêu dùng, Phát sinh, Tiết kiệm, Trả nợ)
+app.get('/api/finance/weekly-report', async (req, res) => {
+  try {
+    const chatId = req.query.chatId;
+    if (!chatId) return res.status(401).json({ error: 'Missing chatId' });
+
+    const offset = parseInt(req.query.offset) || 0;
+    const report = await financeService.getWeeklyReport(chatId, offset);
+    res.json({ success: true, ...report });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Reset tiến độ tuần thủ công (user tự tay reset sau khi hết tuần)
+app.post('/api/finance/weekly-reset', async (req, res) => {
+  try {
+    const { chatId } = req.body;
+    if (!chatId) return res.status(401).json({ error: 'Missing chatId' });
+
+    const result = await financeService.resetWeeklyProgress(chatId);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Lấy danh sách các quỹ
 app.get('/api/finance/funds', async (req, res) => {
   try {
@@ -268,11 +295,12 @@ app.delete('/api/finance/transactions/:id', async (req, res) => {
   }
 });
 
-// Internal Cron (kiểm tra nhắc hẹn deadline & tự động kết chuyển quỹ tuần mới)
+// Internal Cron (kiểm tra nhắc hẹn deadline, tự động gửi báo cáo tuần T2-CN)
 setInterval(async () => {
   try {
     await reminderService.checkReminders();
     await financeService.checkAllUsersWeeklyRollover();
+    await telegramService.checkWeeklyReportCron();
   } catch (err) {
     console.error('Lỗi khi chạy internal cron:', err);
   }

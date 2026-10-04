@@ -1,8 +1,14 @@
 const TelegramBot = require('node-telegram-bot-api');
+const dayjs = require('dayjs');
+const utc = require('dayjs/plugin/utc');
+const timezone = require('dayjs/plugin/timezone');
 const config = require('../config');
 const db = require('../db/database');
 const { parseMessage, parseFinanceMessage, formatTime, formatMoney, parseAmount } = require('../utils/parser');
 const financeService = require('./financeService');
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const bot = new TelegramBot(config.botToken, { polling: true });
 const pendingDeadlines = new Map();
@@ -108,6 +114,8 @@ bot.on('message', async (msg) => {
         `📋 **3. CÁC LỆNH NHANH:**\n` +
         `• \`?\` : Xem bảng hướng dẫn giao tiếp này\n` +
         `• \`/finance\` (hoặc \`/tien\`, \`/vi\`) : Xem tình hình tài chính hiện tại\n` +
+        `• \`/baocao\` (hoặc \`/report\`) : Xem báo cáo tổng kết tuần (Tiêu dùng, Phát sinh, Tiết kiệm, Trả nợ)\n` +
+        `• \`/reset\` : Reset lại tiến độ tuần về 0 đ\n` +
         `• \`/web\` : Lấy mã PIN đăng nhập Web Dashboard`,
         { parse_mode: 'Markdown' }
       );
@@ -125,11 +133,11 @@ bot.on('message', async (msg) => {
       let reply = `💰 **TÌNH HÌNH TÀI CHÍNH HIỆN TẠI**\n\n`;
       reply += `💳 **Tổng số tiền:** \`${formatMoney(overview.totalBalance)}\`\n\n`;
 
-      reply += `📊 **Tiến độ tuần (${overview.weekInfo.label}):**\n`;
+      reply += `📊 **Tiến độ tuần:**\n`;
       reply += `• Hạn mức chi tiêu tuần: \`${formatMoney(overview.weeklyBudget)}\`\n`;
-      reply += `• Đã chi tiêu tuần này: \`${formatMoney(overview.spentThisWeek)}\`\n`;
+      reply += `• Đã chi: \`${formatMoney(overview.spentThisWeek)}\`\n`;
       if (overview.remainingWeek >= 0) {
-        reply += `• Còn lại tuần này: \`${formatMoney(overview.remainingWeek)}\` 🟢\n\n`;
+        reply += `• Còn lại: \`${formatMoney(overview.remainingWeek)}\` 🟢\n\n`;
       } else {
         reply += `• Đã thâm hụt: \`${formatMoney(Math.abs(overview.remainingWeek))}\` 🔴 (Vượt hạn mức!)\n\n`;
       }
@@ -141,9 +149,52 @@ bot.on('message', async (msg) => {
       reply += `• **Tiết kiệm:** \`${formatMoney(overview.savingsBalance)}\`\n\n`;
 
       reply += `💡 Gõ \`-50k, ăn trưa\` để chi tiêu hoặc \`+100k\` để thêm tiết kiệm.\n`;
-      reply += `💡 Nhắn \`?\` để mở lại bảng hướng dẫn.`;
+      reply += `💡 Gõ \`/baocao\` để xem tổng kết tuần, \`/reset\` để reset tiến độ.`;
 
       return bot.sendMessage(chatId, reply, { parse_mode: 'Markdown' });
+    }
+
+    // Lệnh xem báo cáo tổng kết tuần (/baocao hoặc /report)
+    if (
+      lowerText === '/baocao' ||
+      lowerText === '/report' ||
+      lowerText === '/tongket' ||
+      lowerText === '/tongkettuan' ||
+      lowerText.startsWith('/baocao ') ||
+      lowerText.startsWith('/report ')
+    ) {
+      const isCurrent = lowerText.includes('tuannay') || lowerText.includes('nay');
+      const offset = isCurrent ? 0 : -1;
+      const reportMsg = await buildWeeklyReportTelegramMessage(chatId, offset);
+      return bot.sendMessage(chatId, reportMsg.text, {
+        parse_mode: 'Markdown',
+        reply_markup: reportMsg.replyMarkup
+      });
+    }
+
+    // Lệnh reset tiến độ tuần thủ công (/reset hoặc /reset_tuan)
+    if (
+      lowerText === '/reset' ||
+      lowerText === '/reset_tuan' ||
+      lowerText === '/resettuan'
+    ) {
+      return bot.sendMessage(
+        chatId,
+        `⚠️ *XÁC NHẬN RESET TIẾN ĐỘ TUẦN*\n\n` +
+        `Bạn có chắc chắn muốn đặt lại số tiền đã chi trong tiến độ tuần về *0 đ* không?\n` +
+        `*(Các quỹ và tổng số tiền của bạn sẽ được giữ nguyên, không bị ảnh hưởng)*`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: '✅ Xác nhận Reset', callback_data: 'confirm_reset_weekly' },
+                { text: '❌ Hủy', callback_data: 'cancel_reset_weekly' }
+              ]
+            ]
+          }
+        }
+      );
     }
 
     const msgId = msg.message_id;
@@ -252,14 +303,82 @@ function buildTransactionReport(result, overview, titlePrefix = '') {
 
   // Quỹ trả nợ và tiết kiệm không ảnh hưởng đến tiến độ tuần
   if (fundName !== 'Trả nợ' && fundName !== 'Tiết kiệm') {
-    report += `\n\n📊 **Tiến độ chi tiêu tuần (${overview.weekInfo ? overview.weekInfo.label : 'Tuần này'}):**\n`
-            + `• Đã chi tuần này: \`${formatMoney(overview.spentThisWeek)}\` / ${formatMoney(overview.weeklyBudget)}\n`
+    report += `\n\n📊 **Tiến độ chi tiêu tuần:**\n`
+            + `• Đã chi: \`${formatMoney(overview.spentThisWeek)}\` / ${formatMoney(overview.weeklyBudget)}\n`
             + (overview.remainingWeek >= 0
-                ? `• Còn lại tuần này: \`${formatMoney(overview.remainingWeek)}\` 🟢`
-                : `• Đã thâm hụt tuần này: \`${formatMoney(Math.abs(overview.remainingWeek))}\` 🔴 (Vượt hạn mức!)`);
+                ? `• Còn lại: \`${formatMoney(overview.remainingWeek)}\` 🟢`
+                : `• Đã thâm hụt: \`${formatMoney(Math.abs(overview.remainingWeek))}\` 🔴 (Vượt hạn mức!)`);
   }
 
   return report;
+}
+
+// Xây dựng tin nhắn báo cáo tổng kết tuần gửi qua Telegram
+async function buildWeeklyReportTelegramMessage(chatId, offset = -1) {
+  const report = await financeService.getWeeklyReport(chatId, offset);
+  const isPrevious = offset === -1;
+  const cycleTitle = isPrevious ? 'TUẦN VỪA QUA (ĐÃ XONG)' : 'TUẦN NÀY (HIỆN TẠI)';
+
+  let text = `📊 **BÁO CÁO TỔNG KẾT ${cycleTitle}**\n`
+           + `🗓️ Chu kỳ: *Thứ Hai - Chủ Nhật (${report.startDateStr} - ${report.endDateStr})*\n\n`
+           + `💸 **ĐÃ XÀI (TIÊU DÙNG & PHÁT SINH):** \`${formatMoney(report.totalSpent)}\`\n`
+           + `• Quỹ Tiêu dùng: \`${formatMoney(report.spendingSpent)}\`\n`
+           + `• Quỹ Phát sinh: \`${formatMoney(report.extraSpent)}\`\n\n`
+           + `💰 **THU NHẬP ĐƯỢC (TIẾT KIỆM):** \`${formatMoney(report.savingsIncome)}\`\n`
+           + `• Quỹ Tiết kiệm: \`${formatMoney(report.savingsIncome)}\`\n\n`
+           + `💳 **TRẢ NỢ ĐƯỢC (TRẢ NỢ):** \`${formatMoney(report.debtPaid)}\`\n`
+           + `• Quỹ Trả nợ: \`${formatMoney(report.debtPaid)}\`\n\n`
+           + `💡 Bạn có thể bấm nút Reset bên dưới hoặc gõ \`/reset\` khi muốn bắt đầu chu kỳ tuần mới!`;
+
+  const replyMarkup = {
+    inline_keyboard: [
+      [
+        { text: isPrevious ? '▶️ Xem Tuần Này' : '◀️ Xem Tuần Trước', callback_data: isPrevious ? 'report_view_curr' : 'report_view_prev' },
+        { text: '🔄 Reset Tiến Độ', callback_data: 'confirm_reset_weekly' }
+      ]
+    ]
+  };
+
+  return { text, replyMarkup };
+}
+
+// Cron tự động gửi báo cáo khi kết thúc tuần (T2 - CN)
+async function checkWeeklyReportCron() {
+  const now = dayjs().tz('Asia/Ho_Chi_Minh');
+  const dayOfWeek = now.day(); // 0: CN, 1: T2
+
+  // Kích hoạt vào Thứ Hai hoặc Chủ Nhật đêm lúc >= 23:55
+  const isEndOfWeek = (dayOfWeek === 1) || (dayOfWeek === 0 && now.hour() === 23 && now.minute() >= 55);
+  if (!isEndOfWeek) return;
+
+  const prevWeek = financeService.getCurrentWeekRange(-1);
+  const targetWeekKey = prevWeek.weekKey;
+
+  const usersRes = await db.execute(`SELECT chat_id FROM allowed_users`);
+  for (const row of usersRes.rows) {
+    const chatId = row.chat_id;
+    try {
+      const stateRes = await db.execute({
+        sql: `SELECT last_weekly_report_week FROM user_finance_state WHERE chat_id = ?`,
+        args: [chatId]
+      });
+      const lastSent = stateRes.rows[0] ? stateRes.rows[0].last_weekly_report_week : null;
+      if (lastSent === targetWeekKey) continue;
+
+      const reportMsg = await buildWeeklyReportTelegramMessage(chatId, -1);
+      await bot.sendMessage(chatId, `🔔 **THÔNG BÁO TỰ ĐỘNG KẾT THÚC TUẦN**\n\n` + reportMsg.text, {
+        parse_mode: 'Markdown',
+        reply_markup: reportMsg.replyMarkup
+      });
+
+      await db.execute({
+        sql: `UPDATE user_finance_state SET last_weekly_report_week = ?, updated_at = ? WHERE chat_id = ?`,
+        args: [targetWeekKey, Date.now(), chatId]
+      });
+    } catch (err) {
+      console.warn(`Lỗi gửi báo cáo tự động tuần cho user ${chatId}:`, err.message);
+    }
+  }
 }
 
 bot.on('callback_query', async (query) => {
@@ -268,8 +387,44 @@ bot.on('callback_query', async (query) => {
   const action = query.data;
 
   try {
+    // XEM BÁO CÁO TUẦN NÀY / TUẦN TRƯỚC
+    if (action === 'report_view_curr') {
+      const reportMsg = await buildWeeklyReportTelegramMessage(chatId, 0);
+      return bot.editMessageText(reportMsg.text, {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode: 'Markdown',
+        reply_markup: reportMsg.replyMarkup
+      });
+    }
+
+    else if (action === 'report_view_prev') {
+      const reportMsg = await buildWeeklyReportTelegramMessage(chatId, -1);
+      return bot.editMessageText(reportMsg.text, {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode: 'Markdown',
+        reply_markup: reportMsg.replyMarkup
+      });
+    }
+
+    // XÁC NHẬN RESET TIẾN ĐỘ TUẦN
+    else if (action === 'confirm_reset_weekly') {
+      await financeService.resetWeeklyProgress(chatId);
+      return bot.editMessageText(
+        `🔄 *ĐÃ RESET TIẾN ĐỘ TUẦN VỀ 0 đ!*\n\n` +
+        `Tiến độ chi tiêu tuần mới của bạn đã được đặt lại về *0 đ*.\n` +
+        `Các quỹ và tổng số tiền của bạn vẫn giữ nguyên!`,
+        { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown' }
+      );
+    }
+
+    else if (action === 'cancel_reset_weekly') {
+      return bot.editMessageText('Đã hủy thao tác reset tiến độ tuần.', { chat_id: chatId, message_id: messageId });
+    }
+
     // XÁC NHẬN GIAO DỊCH TIỀN BẠC
-    if (action === 'confirm_finance_ok') {
+    else if (action === 'confirm_finance_ok') {
       const data = pendingFinances.get(chatId);
       if (!data) return bot.answerCallbackQuery(query.id, { text: 'Không tìm thấy giao dịch chờ xác nhận!' });
 
@@ -371,5 +526,7 @@ function sendMessage(chatId, text, options) {
 module.exports = {
   bot,
   sendMessage,
-  buildTransactionReport
+  buildTransactionReport,
+  buildWeeklyReportTelegramMessage,
+  checkWeeklyReportCron
 };
