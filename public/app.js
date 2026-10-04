@@ -287,43 +287,76 @@ async function saveWeeklySpent(amountVal) {
         overviewData = result.overview;
       }
       loadFinanceOverview();
+      showToast('Đã lưu chi tiêu tuần!');
     } else {
-      alert('Lỗi: ' + (result.error || 'Không thể lưu chi tiêu'));
+      showToast('Lỗi: ' + (result.error || 'Không thể lưu chi tiêu'), true);
     }
   } catch (err) {
-    alert('Lỗi kết nối khi lưu chi tiêu tuần: ' + err.message);
+    showToast('Lỗi kết nối khi lưu chi tiêu: ' + err.message, true);
   }
 }
 
-// Chỉnh sửa số tiền đã chi bằng cách nhập số trực tiếp
+// Chỉnh sửa số tiền đã chi bằng Modal giao diện chuẩn
 async function handleEditWeeklySpent() {
   const currentSpent = overviewData ? overviewData.spentThisWeek : 0;
-  const input = prompt('Nhập số tiền đã chi tuần này (VD: 200k, 250k):', currentSpent);
-  if (input === null || input.trim() === '') return;
-  await saveWeeklySpent(input.trim());
+  showModal({
+    title: 'SỬA SỐ TIỀN ĐÃ CHI TUẦN',
+    desc: 'Nhập số tiền đã chi tuần này:',
+    defaultValue: currentSpent,
+    placeholder: 'VD: 200k, 250000',
+    onConfirm: async (val) => {
+      try {
+        const res = await fetch('/api/finance/weekly-spent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chatId: myChatId, spent: val.trim() })
+        });
+        const result = await res.json();
+        if (result.success) {
+          closeModal();
+          showToast('Đã cập nhật số tiền chi tuần!');
+          if (result.overview) {
+            overviewData = result.overview;
+          }
+          loadFinanceOverview();
+        } else {
+          showModalError(result.error || 'Không thể lưu chi tiêu');
+        }
+      } catch (err) {
+        showModalError('Lỗi kết nối khi lưu chi tiêu: ' + err.message);
+      }
+    }
+  });
 }
 
-// Chỉnh sửa hạn mức chi tiêu tuần trực tiếp qua Web
+// Chỉnh sửa hạn mức chi tiêu tuần bằng Modal giao diện chuẩn
 async function handleEditWeeklyBudget() {
   const currentBudget = overviewData ? overviewData.weeklyBudget : 500000;
-  const input = prompt('Nhập hạn mức tuần mới (VD: 500k, 700k):', currentBudget);
-  if (input === null || input.trim() === '') return;
-
-  try {
-    const res = await fetch('/api/finance/weekly-budget', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chatId: myChatId, amount: input.trim() })
-    });
-    const result = await res.json();
-    if (result.success) {
-      loadFinanceOverview();
-    } else {
-      alert('Lỗi: ' + (result.error || 'Không thể cập nhật hạn mức'));
+  showModal({
+    title: 'SỬA HẠN MỨC TUẦN',
+    desc: 'Nhập hạn mức chi tiêu tuần mới:',
+    defaultValue: currentBudget,
+    placeholder: 'VD: 500k, 700k',
+    onConfirm: async (val) => {
+      try {
+        const res = await fetch('/api/finance/weekly-budget', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chatId: myChatId, amount: val.trim() })
+        });
+        const result = await res.json();
+        if (result.success) {
+          closeModal();
+          showToast('Đã cập nhật hạn mức chi tiêu tuần!');
+          loadFinanceOverview();
+        } else {
+          showModalError(result.error || 'Không thể cập nhật hạn mức');
+        }
+      } catch (err) {
+        showModalError('Lỗi kết nối khi cập nhật hạn mức');
+      }
     }
-  } catch (err) {
-    alert('Lỗi kết nối khi cập nhật hạn mức');
-  }
+  });
 }
 
 // Render thẻ các Quỹ cố định (hoàn toàn không có icon, không tag nhỏ hay ghi chú thừa)
@@ -353,51 +386,65 @@ function renderFunds(funds) {
   });
 }
 
-// Chỉnh sửa số tiền của bất kỳ quỹ nào trực tiếp qua Web
+// Chỉnh sửa số tiền của bất kỳ quỹ nào bằng Modal giao diện chuẩn
 async function handleEditFundBalance(fundId, fundName, currentBalance) {
-  const input = prompt(`Nhập số tiền mới cho quỹ "${fundName}" (VD: 500k, -700k):`, currentBalance);
-  if (input === null || input.trim() === '') return;
-
-  try {
-    const res = await fetch(`/api/finance/funds/${fundId}/balance`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chatId: myChatId, balance: input.trim() })
-    });
-    const result = await res.json();
-    if (result.success) {
-      loadFinanceOverview();
-      loadTransactions(currentFinanceFilter);
-    } else {
-      alert('Lỗi: ' + (result.error || 'Không thể cập nhật số tiền'));
+  showModal({
+    title: `SỬA SỐ TIỀN - QUỸ ${fundName.toUpperCase()}`,
+    desc: `Nhập số tiền mới cho quỹ ${fundName}:`,
+    defaultValue: currentBalance,
+    placeholder: 'VD: 300k, 500000, -700k',
+    onConfirm: async (val) => {
+      try {
+        const res = await fetch(`/api/finance/funds/${fundId}/balance`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chatId: myChatId, balance: val.trim() })
+        });
+        const result = await res.json();
+        if (result.success) {
+          closeModal();
+          showToast(`Đã cập nhật số tiền quỹ ${fundName}!`);
+          loadFinanceOverview();
+          loadTransactions(currentFinanceFilter);
+        } else {
+          showModalError(result.error || 'Không thể cập nhật số tiền');
+        }
+      } catch (err) {
+        showModalError('Lỗi kết nối khi cập nhật số tiền');
+      }
     }
-  } catch (err) {
-    alert('Lỗi kết nối khi cập nhật số tiền');
-  }
+  });
 }
 
-// Chỉnh sửa tổng số tiền trực tiếp qua Web
+// Chỉnh sửa tổng số tiền bằng Modal giao diện chuẩn
 async function handleEditTotalBalance() {
   const currentTotalText = document.getElementById('total-balance-display').textContent.trim();
-  const input = prompt(`Nhập tổng số tiền mới (VD: 5tr, 500k):`, currentTotalText.replace(/[^\d-]/g, ''));
-  if (input === null || input.trim() === '') return;
-
-  try {
-    const res = await fetch('/api/finance/total-money', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chatId: myChatId, amount: input.trim() })
-    });
-    const result = await res.json();
-    if (result.success) {
-      loadFinanceOverview();
-      loadTransactions(currentFinanceFilter);
-    } else {
-      alert('Lỗi: ' + (result.error || 'Không thể cập nhật tổng số tiền'));
+  showModal({
+    title: 'SỬA TỔNG SỐ TIỀN',
+    desc: 'Nhập tổng số tiền mới của bạn:',
+    defaultValue: currentTotalText.replace(/[^\d-]/g, ''),
+    placeholder: 'VD: 5tr, 500k, 1000000',
+    onConfirm: async (val) => {
+      try {
+        const res = await fetch('/api/finance/total-money', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chatId: myChatId, amount: val.trim() })
+        });
+        const result = await res.json();
+        if (result.success) {
+          closeModal();
+          showToast('Đã cập nhật tổng số tiền!');
+          loadFinanceOverview();
+          loadTransactions(currentFinanceFilter);
+        } else {
+          showModalError(result.error || 'Không thể cập nhật tổng số tiền');
+        }
+      } catch (err) {
+        showModalError('Lỗi kết nối khi cập nhật tổng số tiền');
+      }
     }
-  } catch (err) {
-    alert('Lỗi kết nối khi cập nhật tổng số tiền');
-  }
+  });
 }
 
 // Chọn loại giao dịch (Chi tiêu hay Thu nhập)
@@ -430,7 +477,7 @@ async function handleAddTransaction() {
   const timeStr = document.getElementById('trans-time-input').value.trim();
 
   if (!amountStr) {
-    alert('Vui lòng nhập số tiền (VD: 50k hoặc 50000)!');
+    showToast('Vui lòng nhập số tiền (VD: 50k hoặc 50000)!', true);
     return;
   }
 
@@ -471,17 +518,12 @@ async function handleAddTransaction() {
       document.getElementById('trans-time-input').value = '';
       loadFinanceOverview();
       loadTransactions(currentFinanceFilter);
-      alert(
-        `Đã lưu giao dịch:\n` +
-        `• ${result.type === 'income' ? 'Thu' : 'Chi'}: ${formatMoney(result.amount)}\n` +
-        `• Quỹ: ${result.fund_name} (${formatMoney(result.fund_balance)})\n` +
-        `• Tổng tiền: ${formatMoney(result.total_balance)}`
-      );
+      showToast(`Đã lưu: ${result.type === 'income' ? '+' : '-'}${formatMoney(result.amount)} (${result.fund_name})`);
     } else {
-      alert('Lỗi: ' + (result.error || 'Không thể thêm giao dịch'));
+      showToast('Lỗi: ' + (result.error || 'Không thể thêm giao dịch'), true);
     }
   } catch (err) {
-    alert('Lỗi khi thêm giao dịch: ' + err.message);
+    showToast('Lỗi khi thêm giao dịch: ' + err.message, true);
   }
 }
 
@@ -553,11 +595,14 @@ async function handleDeleteTransaction(id) {
       const res = await fetch(`/api/finance/transactions/${id}?chatId=${myChatId}`, { method: 'DELETE' });
       const result = await res.json();
       if (result.success) {
+        showToast('Đã xóa giao dịch và hoàn tiền vào quỹ!');
         loadFinanceOverview();
         loadTransactions(currentFinanceFilter);
+      } else {
+        showToast('Lỗi khi xóa giao dịch: ' + (result.error || 'Thao tác thất bại'), true);
       }
     } catch (err) {
-      alert('Lỗi khi xóa giao dịch');
+      showToast('Lỗi khi xóa giao dịch', true);
     }
   }
 }
@@ -572,3 +617,99 @@ function escapeHtml(text) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
+
+// ================= HỆ THỐNG MODAL & TOAST GIAO DIỆN CHUẨN =================
+let currentModalCallback = null;
+
+function showModal({ title, desc, defaultValue = '', placeholder = '', onConfirm }) {
+  const overlay = document.getElementById('modal-overlay');
+  const titleEl = document.getElementById('modal-title');
+  const descEl = document.getElementById('modal-desc');
+  const inputEl = document.getElementById('modal-input');
+  const errorEl = document.getElementById('modal-error');
+
+  if (!overlay || !inputEl) return;
+
+  titleEl.textContent = title || 'CHỈNH SỬA SỐ TIỀN';
+  descEl.textContent = desc || 'Nhập số tiền mới:';
+  inputEl.value = defaultValue;
+  inputEl.placeholder = placeholder;
+  errorEl.style.display = 'none';
+  errorEl.textContent = '';
+
+  currentModalCallback = onConfirm;
+  overlay.style.display = 'flex';
+
+  setTimeout(() => {
+    inputEl.focus();
+    inputEl.select();
+  }, 50);
+}
+
+function closeModal() {
+  const overlay = document.getElementById('modal-overlay');
+  if (overlay) overlay.style.display = 'none';
+  currentModalCallback = null;
+}
+
+function handleOverlayClick(event) {
+  if (event.target && event.target.id === 'modal-overlay') {
+    closeModal();
+  }
+}
+
+function showModalError(msg) {
+  const errorEl = document.getElementById('modal-error');
+  if (errorEl) {
+    errorEl.textContent = msg;
+    errorEl.style.display = 'block';
+  }
+}
+
+async function submitModal() {
+  const inputEl = document.getElementById('modal-input');
+  const val = inputEl ? inputEl.value.trim() : '';
+  if (!val) {
+    showModalError('Vui lòng nhập số tiền!');
+    return;
+  }
+  if (typeof currentModalCallback === 'function') {
+    await currentModalCallback(val);
+  }
+}
+
+function showToast(message, isError = false) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast-item ${isError ? 'error' : ''}`;
+  toast.textContent = message;
+
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.transition = 'opacity 0.3s, transform 0.3s';
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+    setTimeout(() => {
+      if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, 300);
+  }, 3000);
+}
+
+// Bắt phím Enter / Escape trong Modal
+window.addEventListener('keydown', (e) => {
+  const overlay = document.getElementById('modal-overlay');
+  if (!overlay || overlay.style.display === 'none') return;
+
+  if (e.key === 'Escape') {
+    closeModal();
+  } else if (e.key === 'Enter') {
+    const inputEl = document.getElementById('modal-input');
+    if (document.activeElement === inputEl) {
+      e.preventDefault();
+      submitModal();
+    }
+  }
+});

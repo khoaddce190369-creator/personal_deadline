@@ -5,6 +5,26 @@ const timezone = require('dayjs/plugin/timezone');
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
+// Bỏ dấu tiếng Việt chuẩn xác (xử lý cả đ/Đ và tổ hợp ký tự)
+function removeVietnameseTones(str) {
+  if (!str) return '';
+  str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, 'a');
+  str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, 'e');
+  str = str.replace(/ì|í|ị|ỉ|ĩ/g, 'i');
+  str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, 'o');
+  str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, 'u');
+  str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, 'y');
+  str = str.replace(/đ/g, 'd');
+  str = str.replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, 'A');
+  str = str.replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, 'E');
+  str = str.replace(/Ì|Í|Ị|Ỉ|Ĩ/g, 'I');
+  str = str.replace(/Ò|Ó|Ỏ|Õ|Ô|Ồ|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, 'O');
+  str = str.replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, 'U');
+  str = str.replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, 'Y');
+  str = str.replace(/Đ/g, 'D');
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
 // Chuyển đổi chuỗi số tiền thông minh (50k, 1.5tr, 2m, 50000, 50.000)
 function parseAmount(amountStr) {
   if (typeof amountStr === 'number') return Math.abs(amountStr);
@@ -194,11 +214,31 @@ function parseFinanceMessage(text) {
     descParts.push(part);
   }
 
-  // 3. Quy tắc mặc định quỹ khi không có tag:
-  // Nếu không nhập tag: '+' vào Tiết kiệm, '-' vào Tiêu dùng
+  // 3. Quy tắc nhận diện quỹ khi không có tag:
+  // - Chứa từ khóa ăn, uống, cơm, phở, bún... -> Quỹ Tiêu dùng
+  // - Chứa từ khóa xăng, giặt đồ, bánh, gửi xe, sửa xe... -> Quỹ Phát sinh
+  // - Nếu không có từ khóa: '+' vào Tiết kiệm, '-' vào Tiêu dùng
   let fundName = matchedFund;
   if (!fundName) {
-    fundName = (type === 'income') ? 'Tiết kiệm' : 'Tiêu dùng';
+    const rawDesc = descParts.join(' ').toLowerCase();
+    const cleanDesc = removeVietnameseTones(rawDesc);
+
+    // Từ khóa Phát sinh: xăng, giặt đồ, bánh...
+    const isExtra = /\b(xang|giat|giat do|banh|gui xe|sua xe|nhot|do xang)\b/i.test(cleanDesc);
+
+    // Từ khóa Tiêu dùng: ăn, uống, cơm, phở, bún, nước...
+    const isSpending = /\b(an|uong|com|pho|bun|nuoc|cafe|cf|tra)\b/i.test(cleanDesc);
+
+    if (isExtra && !isSpending) {
+      fundName = 'Phát sinh';
+    } else if (isSpending && !isExtra) {
+      fundName = 'Tiêu dùng';
+    } else if (isSpending && isExtra) {
+      // Khi có cả ăn và bánh: bánh được xếp vào quỹ Phát sinh theo yêu cầu người dùng
+      fundName = cleanDesc.includes('banh') ? 'Phát sinh' : 'Tiêu dùng';
+    } else {
+      fundName = (type === 'income') ? 'Tiết kiệm' : 'Tiêu dùng';
+    }
   }
 
   // 4. Nội dung (Description)
